@@ -161,9 +161,20 @@ class FirestoreService {
       QuerySnapshot snapshot = await _db
           .collection('materials')
           .where('projectId', isEqualTo: projectId)
-          .orderBy('createdAt')
           .get();
-      return snapshot.docs.map((doc) => Material.fromMap(doc.data() as Map<String, dynamic>)).toList();
+      
+      List<Material> materials = [];
+      for (var doc in snapshot.docs) {
+        try {
+          final material = Material.fromMap(doc.data() as Map<String, dynamic>);
+          materials.add(material);
+        } catch (e) {
+          if (kDebugMode) print('Error parsing material ${doc.id}: $e');
+        }
+      }
+      
+      print('🔥 FIRESTORE: Fetched ${materials.length} materials from Firebase for project $projectId');
+      return materials;
     } catch (e) {
       if (kDebugMode) print('Error getting materials: $e');
       return [];
@@ -173,9 +184,10 @@ class FirestoreService {
   Future<bool> createMaterial(Material material) async {
     try {
       await _db.collection('materials').doc(material.id).set(material.toMap());
+      print('✅ CREATED: Material "${material.name ?? 'Unnamed'}" saved to Firebase with ID: ${material.id}');
       return true;
     } catch (e) {
-      if (kDebugMode) print('Error creating material: $e');
+      print('❌ ERROR: Failed to create material: $e');
       return false;
     }
   }
@@ -208,7 +220,6 @@ class FirestoreService {
       QuerySnapshot snapshot = await _db
           .collection('machinery')
           .where('projectId', isEqualTo: projectId)
-          .orderBy('createdAt')
           .get();
       return snapshot.docs.map((doc) => Machinery.fromMap(doc.data() as Map<String, dynamic>)).toList();
     } catch (e) {
@@ -255,10 +266,22 @@ class FirestoreService {
       QuerySnapshot snapshot = await _db
           .collection('labor')
           .where('projectId', isEqualTo: projectId)
-          .orderBy('workDate', descending: true)
-          .get();
-      return snapshot.docs.map((doc) => Labor.fromMap(doc.data() as Map<String, dynamic>)).toList();
+          .get(); // Removed orderBy to avoid index issues with nullable workDate
+      
+      List<Labor> laborList = [];
+      for (var doc in snapshot.docs) {
+        try {
+          final labor = Labor.fromMap(doc.data() as Map<String, dynamic>);
+          laborList.add(labor);
+        } catch (e) {
+          if (kDebugMode) print('Error parsing labor ${doc.id}: $e');
+        }
+      }
+      
+      print('🔥 FIRESTORE: Fetched ${laborList.length} labor entries from Firebase for project $projectId');
+      return laborList;
     } catch (e) {
+      print('❌ FIRESTORE: Error getting labor: $e');
       if (kDebugMode) print('Error getting labor: $e');
       return [];
     }
@@ -267,8 +290,10 @@ class FirestoreService {
   Future<bool> createLabor(Labor labor) async {
     try {
       await _db.collection('labor').doc(labor.id).set(labor.toMap());
+      print('✅ FIRESTORE: Labor "${labor.workCategory}" (${labor.entryTypeString}) saved to Firebase with ID: ${labor.id}');
       return true;
     } catch (e) {
+      print('❌ FIRESTORE: Failed to create labor: $e');
       if (kDebugMode) print('Error creating labor: $e');
       return false;
     }
@@ -339,6 +364,76 @@ class FirestoreService {
       return true;
     } catch (e) {
       if (kDebugMode) print('Error deleting daily log: $e');
+      return false;
+    }
+  }
+
+  // Component-Labor Synchronization
+  Future<bool> syncLaborProgressToComponent(String projectId, String workCategory, {
+    double? completedSqFt,
+    bool? recalculateAmountUsed,
+  }) async {
+    try {
+      // Find component with matching name
+      final components = await getProjectComponents(projectId);
+      final matchingComponent = components.where((c) => c.name == workCategory).firstOrNull;
+      
+      if (matchingComponent == null) {
+        if (kDebugMode) print('🔄 SYNC: No component found with name "$workCategory" - skipping sync');
+        return true; // Not an error, just no matching component
+      }
+
+      // Calculate new values
+      double newCompletedArea = matchingComponent.completedArea;
+      double newAmountUsed = matchingComponent.amountUsed;
+
+      // Update completed area from contract progress
+      if (completedSqFt != null) {
+        // For contract progress, we get the total completed square feet
+        // We need to sum all progress entries for this work category
+        final allLabor = await getProjectLabor(projectId);
+        final contractProgressEntries = allLabor
+            .where((l) => l.workCategory == workCategory && l.isProgress && l.isContracted)
+            .toList();
+        
+        final totalCompletedSqFt = contractProgressEntries
+            .fold(0.0, (sum, entry) => sum + (entry.completedSqFt ?? 0.0));
+        
+        newCompletedArea = totalCompletedSqFt;
+      }
+
+      // Recalculate amount used from all labor costs for this component
+      if (recalculateAmountUsed == true) {
+        final allLabor = await getProjectLabor(projectId);
+        final workProgressEntries = allLabor
+            .where((l) => l.workCategory == workCategory && l.isWorkProgress)
+            .toList();
+        
+        final totalLaborCost = workProgressEntries
+            .fold(0.0, (sum, entry) => sum + entry.totalCost);
+        
+        newAmountUsed = totalLaborCost;
+      }
+
+      // Update component if values changed
+      if (newCompletedArea != matchingComponent.completedArea || newAmountUsed != matchingComponent.amountUsed) {
+        final updatedComponent = matchingComponent.copyWith(
+          completedArea: newCompletedArea,
+          amountUsed: newAmountUsed,
+          updatedAt: DateTime.now(),
+        );
+
+        final success = await updateComponent(updatedComponent);
+        if (success) {
+          if (kDebugMode) print('✅ SYNC: Updated component "${workCategory}" - Area: ${newCompletedArea.toStringAsFixed(1)} sq ft, Used: \$${newAmountUsed.toStringAsFixed(2)}');
+        }
+        return success;
+      } else {
+        if (kDebugMode) print('🔄 SYNC: No changes needed for component "$workCategory"');
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ SYNC: Error syncing labor to component: $e');
       return false;
     }
   }

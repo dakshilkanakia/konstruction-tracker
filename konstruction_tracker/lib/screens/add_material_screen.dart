@@ -91,10 +91,11 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
           );
         }
       } else {
-        await firestoreService.createMaterial(material);
+        final success = await firestoreService.createMaterial(material);
+        print('💾 ADD_SCREEN: Create material result: $success');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Material added successfully')),
+            SnackBar(content: Text(success ? 'Material added successfully' : 'Failed to add material')),
           );
         }
       }

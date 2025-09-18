@@ -27,6 +27,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
   final _completedAreaController = TextEditingController();
   final _componentBudgetController = TextEditingController();
   final _amountUsedController = TextEditingController();
+  final _totalConcreteController = TextEditingController();
+  final _concretePouredController = TextEditingController();
   bool _isLoading = false;
 
   bool get _isEditing => widget.component != null;
@@ -40,6 +42,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       _completedAreaController.text = widget.component!.completedArea.toString();
       _componentBudgetController.text = widget.component!.componentBudget.toString();
       _amountUsedController.text = widget.component!.amountUsed.toString();
+      _totalConcreteController.text = widget.component!.totalConcrete.toString();
+      _concretePouredController.text = widget.component!.concretePoured.toString();
     }
   }
 
@@ -50,6 +54,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     _completedAreaController.dispose();
     _componentBudgetController.dispose();
     _amountUsedController.dispose();
+    _totalConcreteController.dispose();
+    _concretePouredController.dispose();
     super.dispose();
   }
 
@@ -62,6 +68,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     final completedArea = double.parse(_completedAreaController.text);
     final componentBudget = double.parse(_componentBudgetController.text);
     final amountUsed = double.parse(_amountUsedController.text.isEmpty ? '0' : _amountUsedController.text);
+    final totalConcrete = double.parse(_totalConcreteController.text.isEmpty ? '0' : _totalConcreteController.text);
+    final concretePoured = double.parse(_concretePouredController.text.isEmpty ? '0' : _concretePouredController.text);
 
     // Validation: completed area cannot exceed total area
     if (completedArea > totalArea) {
@@ -87,6 +95,18 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       return;
     }
 
+    // Validation: concrete poured cannot exceed total concrete
+    if (concretePoured > totalConcrete) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Concrete poured cannot exceed total concrete'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final component = Component(
       id: _isEditing ? widget.component!.id : const Uuid().v4(),
       projectId: widget.project.id,
@@ -95,6 +115,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       completedArea: completedArea,
       componentBudget: componentBudget,
       amountUsed: amountUsed,
+      totalConcrete: totalConcrete,
+      concretePoured: concretePoured,
       createdAt: _isEditing ? widget.component!.createdAt : DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -329,6 +351,70 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                 }
               },
             ),
+            const SizedBox(height: 16),
+
+            // Total Concrete
+            TextFormField(
+              controller: _totalConcreteController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Total Concrete',
+                hintText: 'Total concrete needed in cubic yards',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.construction),
+                suffixText: 'cu yd',
+              ),
+              validator: (value) {
+                if (value != null && value.trim().isNotEmpty) {
+                  final concrete = double.tryParse(value);
+                  if (concrete == null || concrete < 0) {
+                    return 'Please enter a valid concrete amount';
+                  }
+                }
+                return null;
+              },
+              onChanged: (value) {
+                setState(() {}); // Trigger rebuild for progress preview
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Concrete Poured
+            TextFormField(
+              controller: _concretePouredController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Concrete Poured',
+                hintText: 'Concrete already poured in cubic yards',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.opacity),
+                suffixText: 'cu yd',
+              ),
+              validator: (value) {
+                if (value != null && value.trim().isNotEmpty) {
+                  final poured = double.tryParse(value);
+                  if (poured == null || poured < 0) {
+                    return 'Please enter a valid concrete amount';
+                  }
+                }
+                return null;
+              },
+              onChanged: (value) {
+                // Real-time validation for concrete exceeded
+                final concretePoured = double.tryParse(value);
+                final totalConcrete = double.tryParse(_totalConcreteController.text);
+                
+                if (concretePoured != null && totalConcrete != null && concretePoured > totalConcrete) {
+                  setState(() {});
+                }
+              },
+            ),
             const SizedBox(height: 8),
 
             // Progress Preview
@@ -338,6 +424,10 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
             // Budget Progress Preview
             if (_componentBudgetController.text.isNotEmpty && _amountUsedController.text.isNotEmpty)
               _buildBudgetProgressPreview(),
+            
+            // Concrete Progress Preview
+            if (_totalConcreteController.text.isNotEmpty && _concretePouredController.text.isNotEmpty)
+              _buildConcreteProgressPreview(),
 
             const SizedBox(height: 32),
 
@@ -506,6 +596,68 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildConcreteProgressPreview() {
+    final totalConcrete = double.tryParse(_totalConcreteController.text) ?? 0;
+    final concretePoured = double.tryParse(_concretePouredController.text) ?? 0;
+    
+    if (totalConcrete <= 0) return const SizedBox.shrink();
+    
+    final progress = (concretePoured / totalConcrete).clamp(0.0, 1.0);
+    final isOvercomplete = concretePoured > totalConcrete;
+    final isWarning = progress > 0.8 && !isOvercomplete;
+    
+    return Card(
+      color: isOvercomplete 
+          ? Colors.red.withOpacity(0.1)
+          : isWarning 
+              ? Colors.orange.withOpacity(0.1)
+              : Theme.of(context).colorScheme.surfaceVariant,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isOvercomplete ? Icons.error : Icons.opacity,
+                  color: isOvercomplete 
+                      ? Colors.red 
+                      : isWarning 
+                          ? Colors.orange 
+                          : Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isOvercomplete ? 'Error: Concrete Exceeded' : 'Concrete Progress Preview',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: isOvercomplete ? Colors.red : isWarning ? Colors.orange : null,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+              color: isOvercomplete ? Colors.red : isWarning ? Colors.orange : Colors.green,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isOvercomplete 
+                  ? 'Concrete poured cannot exceed total concrete'
+                  : '${(progress * 100).toStringAsFixed(1)}% Complete • ${(totalConcrete - concretePoured).toStringAsFixed(1)} cu yd remaining',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isOvercomplete ? Colors.red : isWarning ? Colors.orange : null,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

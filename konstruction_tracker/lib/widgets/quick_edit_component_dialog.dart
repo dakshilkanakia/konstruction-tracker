@@ -23,6 +23,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
   final _formKey = GlobalKey<FormState>();
   final _completedAreaController = TextEditingController();
   final _amountUsedController = TextEditingController();
+  final _concretePouredController = TextEditingController();
   bool _isLoading = false;
   bool _showAdvanced = false;
   
@@ -30,6 +31,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
   final _nameController = TextEditingController();
   final _totalAreaController = TextEditingController();
   final _componentBudgetController = TextEditingController();
+  final _totalConcreteController = TextEditingController();
 
   @override
   void initState() {
@@ -37,20 +39,24 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
     // Pre-fill with current values
     _completedAreaController.text = widget.component.completedArea.toString();
     _amountUsedController.text = widget.component.amountUsed.toString();
+    _concretePouredController.text = widget.component.concretePoured.toString();
     
     // Advanced fields
     _nameController.text = widget.component.name;
     _totalAreaController.text = widget.component.totalArea.toString();
     _componentBudgetController.text = widget.component.componentBudget.toString();
+    _totalConcreteController.text = widget.component.totalConcrete.toString();
   }
 
   @override
   void dispose() {
     _completedAreaController.dispose();
     _amountUsedController.dispose();
+    _concretePouredController.dispose();
     _nameController.dispose();
     _totalAreaController.dispose();
     _componentBudgetController.dispose();
+    _totalConcreteController.dispose();
     super.dispose();
   }
 
@@ -61,11 +67,13 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
 
     final completedArea = double.parse(_completedAreaController.text);
     final amountUsed = double.parse(_amountUsedController.text.isEmpty ? '0' : _amountUsedController.text);
+    final concretePoured = double.parse(_concretePouredController.text.isEmpty ? '0' : _concretePouredController.text);
     
     // Get values from advanced fields if shown, otherwise use current values
     final name = _showAdvanced ? _nameController.text.trim() : widget.component.name;
     final totalArea = _showAdvanced ? double.parse(_totalAreaController.text) : widget.component.totalArea;
     final componentBudget = _showAdvanced ? double.parse(_componentBudgetController.text) : widget.component.componentBudget;
+    final totalConcrete = _showAdvanced ? double.parse(_totalConcreteController.text) : widget.component.totalConcrete;
 
     final updatedComponent = widget.component.copyWith(
       name: name,
@@ -73,6 +81,8 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
       completedArea: completedArea,
       componentBudget: componentBudget,
       amountUsed: amountUsed,
+      totalConcrete: totalConcrete,
+      concretePoured: concretePoured,
       updatedAt: DateTime.now(),
     );
 
@@ -200,6 +210,23 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                             ],
                           ),
                         ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total Concrete',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                '${widget.component.totalConcrete.toStringAsFixed(1)} cu yd',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -278,6 +305,31 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                         final budget = double.tryParse(value);
                         if (budget == null || budget <= 0) {
                           return 'Please enter a valid budget amount';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Total Concrete
+                    TextFormField(
+                      controller: _totalConcreteController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Total Concrete',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.construction),
+                        suffixText: 'cu yd',
+                      ),
+                      validator: (value) {
+                        if (value != null && value.trim().isNotEmpty) {
+                          final concrete = double.tryParse(value);
+                          if (concrete == null || concrete < 0) {
+                            return 'Please enter a valid concrete amount';
+                          }
                         }
                         return null;
                       },
@@ -361,6 +413,40 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                     },
                     onChanged: (value) => setState(() {}),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Concrete Poured
+                  TextFormField(
+                    controller: _concretePouredController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Concrete Poured',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.opacity),
+                      suffixText: 'cu yd',
+                    ),
+                    validator: (value) {
+                      if (value != null && value.trim().isNotEmpty) {
+                        final poured = double.tryParse(value);
+                        if (poured == null || poured < 0) {
+                          return 'Please enter a valid concrete amount';
+                        }
+                        
+                        final totalConcrete = _showAdvanced 
+                            ? double.tryParse(_totalConcreteController.text) ?? widget.component.totalConcrete
+                            : widget.component.totalConcrete;
+                        
+                        if (poured > totalConcrete) {
+                          return 'Concrete poured cannot exceed total concrete';
+                        }
+                      }
+                      return null;
+                    },
+                    onChanged: (value) => setState(() {}),
+                  ),
                   const SizedBox(height: 20),
 
                   // Progress Preview
@@ -415,13 +501,20 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
         ? double.tryParse(_componentBudgetController.text) ?? widget.component.componentBudget
         : widget.component.componentBudget;
     final amountUsed = double.tryParse(_amountUsedController.text) ?? 0;
+    final totalConcrete = _showAdvanced 
+        ? double.tryParse(_totalConcreteController.text) ?? widget.component.totalConcrete
+        : widget.component.totalConcrete;
+    final concretePoured = double.tryParse(_concretePouredController.text) ?? 0;
 
     final areaProgress = totalArea > 0 ? (completedArea / totalArea).clamp(0.0, 1.0) : 0.0;
     final budgetProgress = componentBudget > 0 ? (amountUsed / componentBudget).clamp(0.0, 1.0) : 0.0;
+    final concreteProgress = totalConcrete > 0 ? (concretePoured / totalConcrete).clamp(0.0, 1.0) : 0.0;
 
     final isAreaExceeded = completedArea > totalArea;
     final isBudgetExceeded = amountUsed > componentBudget;
+    final isConcreteExceeded = concretePoured > totalConcrete;
     final isBudgetWarning = budgetProgress > 0.8;
+    final isConcreteWarning = concreteProgress > 0.8;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -473,6 +566,49 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
           ),
           const SizedBox(height: 12),
 
+          // Concrete Progress
+          if (totalConcrete > 0) ...[
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Concrete Progress',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: concreteProgress,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                        color: isConcreteExceeded 
+                            ? Colors.red 
+                            : isConcreteWarning 
+                                ? Colors.orange 
+                                : Colors.green,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(concreteProgress * 100).toStringAsFixed(1)}%',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isConcreteExceeded 
+                        ? Colors.red 
+                        : isConcreteWarning 
+                            ? Colors.orange 
+                            : Colors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // Budget Progress
           Row(
             children: [
@@ -514,7 +650,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
           ),
 
           // Warnings
-          if (isAreaExceeded || isBudgetExceeded) ...[
+          if (isAreaExceeded || isBudgetExceeded || isConcreteExceeded) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -526,11 +662,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    isAreaExceeded && isBudgetExceeded
-                        ? 'Area and budget limits exceeded'
-                        : isAreaExceeded
-                            ? 'Area limit exceeded'
-                            : 'Budget limit exceeded',
+                    _getWarningMessage(isAreaExceeded, isBudgetExceeded, isConcreteExceeded),
                     style: TextStyle(
                       color: Colors.red,
                       fontSize: 12,
@@ -544,5 +676,20 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
         ],
       ),
     );
+  }
+
+  String _getWarningMessage(bool isAreaExceeded, bool isBudgetExceeded, bool isConcreteExceeded) {
+    final exceededItems = <String>[];
+    if (isAreaExceeded) exceededItems.add('area');
+    if (isBudgetExceeded) exceededItems.add('budget');
+    if (isConcreteExceeded) exceededItems.add('concrete');
+    
+    if (exceededItems.length == 1) {
+      return '${exceededItems[0].substring(0, 1).toUpperCase()}${exceededItems[0].substring(1)} limit exceeded';
+    } else if (exceededItems.length == 2) {
+      return '${exceededItems[0].substring(0, 1).toUpperCase()}${exceededItems[0].substring(1)} and ${exceededItems[1]} limits exceeded';
+    } else {
+      return 'Area, budget, and concrete limits exceeded';
+    }
   }
 }

@@ -13,7 +13,7 @@ import '../widgets/machinery_section.dart';
 import '../widgets/labor_section.dart';
 import '../widgets/daily_logs_section.dart';
 import 'add_component_screen.dart';
-import 'add_labor_screen.dart';
+import 'add_contract_screen.dart';
 import 'add_material_screen.dart';
 import 'add_machinery_screen.dart';
 import 'add_daily_log_screen.dart';
@@ -38,6 +38,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   List<Machinery> _machinery = [];
   bool _isLoading = true;
   int _currentTabIndex = 0;
+  int _laborRefreshKey = 0; // For forcing labor section refresh
 
   @override
   void initState() {
@@ -271,6 +272,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Widget _buildMaterialsTab() {
     return MaterialsSection(
+      key: ValueKey('materials_${_materials.length}'), // Force rebuild when materials count changes
       project: widget.project,
       onRefresh: _loadProjectData,
     );
@@ -282,6 +284,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Widget _buildLaborTab() {
     return LaborSection(
+      key: ValueKey('labor_$_laborRefreshKey'), // Force rebuild when refresh key changes
       project: widget.project,
       onRefresh: _loadProjectData,
     );
@@ -420,9 +423,14 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddLaborScreen(project: widget.project),
+        builder: (context) => AddContractScreen(project: widget.project),
       ),
-    ).then((_) => _loadProjectData());
+    ).then((_) {
+      setState(() {
+        _laborRefreshKey++; // Increment to force labor section rebuild
+      });
+      _loadProjectData();
+    });
   }
 
   void _navigateToAddDailyLog() {

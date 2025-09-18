@@ -8,6 +8,8 @@ class Component {
   final double completedArea; // in square feet
   final double componentBudget; // total budget allocated for this component
   final double amountUsed; // amount actually spent on this component
+  final double totalConcrete; // total concrete needed in cubic yards
+  final double concretePoured; // concrete already poured in cubic yards
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,6 +21,8 @@ class Component {
     required this.completedArea,
     required this.componentBudget,
     required this.amountUsed,
+    required this.totalConcrete,
+    required this.concretePoured,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -33,9 +37,15 @@ class Component {
   double get remainingBudget => componentBudget - amountUsed;
   bool get isBudgetExceeded => amountUsed > componentBudget;
   bool get isBudgetWarning => budgetProgressPercentage > 0.8;
+
+  // Concrete Progress
+  double get concreteProgressPercentage => totalConcrete > 0 ? (concretePoured / totalConcrete) : 0.0;
+  double get remainingConcrete => totalConcrete - concretePoured;
+  bool get isConcreteCompleted => concretePoured >= totalConcrete;
+  bool get isConcreteWarning => concreteProgressPercentage > 0.8;
   
-  // Overall Progress (average of area and budget progress)
-  double get overallProgressPercentage => (areaProgressPercentage + budgetProgressPercentage) / 2;
+  // Overall Progress (average of area, budget, and concrete progress)
+  double get overallProgressPercentage => (areaProgressPercentage + budgetProgressPercentage + concreteProgressPercentage) / 3;
   
   // For backward compatibility and budget calculations
   double get totalCost => amountUsed;
@@ -49,6 +59,8 @@ class Component {
       'completedArea': completedArea,
       'componentBudget': componentBudget,
       'amountUsed': amountUsed,
+      'totalConcrete': totalConcrete,
+      'concretePoured': concretePoured,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -63,6 +75,8 @@ class Component {
       completedArea: (map['completedArea'] ?? 0).toDouble(),
       componentBudget: (map['componentBudget'] ?? 0.0).toDouble(),
       amountUsed: (map['amountUsed'] ?? 0.0).toDouble(),
+      totalConcrete: (map['totalConcrete'] ?? 0.0).toDouble(),
+      concretePoured: (map['concretePoured'] ?? 0.0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
     );
@@ -76,6 +90,8 @@ class Component {
     double? completedArea,
     double? componentBudget,
     double? amountUsed,
+    double? totalConcrete,
+    double? concretePoured,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -87,6 +103,8 @@ class Component {
       completedArea: completedArea ?? this.completedArea,
       componentBudget: componentBudget ?? this.componentBudget,
       amountUsed: amountUsed ?? this.amountUsed,
+      totalConcrete: totalConcrete ?? this.totalConcrete,
+      concretePoured: concretePoured ?? this.concretePoured,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

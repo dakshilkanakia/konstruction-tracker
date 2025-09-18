@@ -83,7 +83,7 @@ ThemeData _buildLightTheme() {
       foregroundColor: Colors.black,
       surfaceTintColor: goldColor,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -140,7 +140,7 @@ ThemeData _buildDarkTheme() {
       foregroundColor: goldColor,
       surfaceTintColor: goldColor,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),

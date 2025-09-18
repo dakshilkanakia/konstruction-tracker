@@ -49,14 +49,14 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
     final labor = widget.labor!;
     _workCategoryController.text = labor.workCategory;
     _ratePerSqFtController.text = labor.ratePerSqFt?.toString() ?? '';
-    _workAreaController.text = labor.workAreaSqFt?.toString() ?? '';
+    _workAreaController.text = labor.completedSqFt?.toString() ?? ''; // Updated field name
     _fixedHourlyRateController.text = labor.fixedHourlyRate?.toString() ?? '';
-    _totalHoursController.text = labor.totalHours.toString();
-    _subcontractorController.text = labor.subcontractorCompany;
-    _numberOfWorkersController.text = labor.numberOfWorkers.toString();
-    _descriptionController.text = labor.description;
+    _totalHoursController.text = labor.hoursWorked?.toString() ?? ''; // Updated field name
+    _subcontractorController.text = labor.subcontractorCompany ?? ''; // Handle null
+    _numberOfWorkersController.text = labor.numberOfWorkers?.toString() ?? ''; // Handle null
+    _descriptionController.text = labor.description ?? ''; // Handle null
     _laborType = labor.type;
-    _workDate = labor.workDate;
+    _workDate = labor.workDate ?? DateTime.now(); // Handle null
   }
 
   @override
@@ -110,19 +110,19 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
           id: _isEditing ? widget.labor!.id : const Uuid().v4(),
           projectId: widget.project.id,
           type: _laborType,
-          description: description,
-          hoursWorked: totalHours, // Keep for backward compatibility
-          costPerHour: ratePerSqFt, // Keep for backward compatibility
-          workerName: subcontractorCompany, // Keep for backward compatibility
-          workDate: _workDate,
-          createdAt: _isEditing ? widget.labor!.createdAt : DateTime.now(),
-          updatedAt: DateTime.now(),
+          entryType: LaborEntryType.progress, // Default to progress entry
           workCategory: workCategory,
           ratePerSqFt: ratePerSqFt,
-          workAreaSqFt: workAreaSqFt,
-          subcontractorCompany: subcontractorCompany,
-          numberOfWorkers: numberOfWorkers,
-          totalHours: totalHours,
+          completedSqFt: workAreaSqFt,
+          workDate: _workDate,
+          subcontractorCompany: subcontractorCompany.isEmpty ? null : subcontractorCompany,
+          // Legacy fields for backward compatibility
+          description: description,
+          hoursWorked: totalHours,
+          costPerHour: ratePerSqFt,
+          workerName: subcontractorCompany,
+          createdAt: _isEditing ? widget.labor!.createdAt : DateTime.now(),
+          updatedAt: DateTime.now(),
         );
       } else {
         // Non-contracted work
@@ -132,18 +132,19 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
           id: _isEditing ? widget.labor!.id : const Uuid().v4(),
           projectId: widget.project.id,
           type: _laborType,
-          description: description,
-          hoursWorked: totalHours, // Keep for backward compatibility
-          costPerHour: fixedHourlyRate, // Keep for backward compatibility
-          workerName: subcontractorCompany, // Keep for backward compatibility
+          entryType: LaborEntryType.progress, // Non-contracted is always progress
+          workCategory: workCategory,
+          hoursWorked: totalHours,
+          fixedHourlyRate: fixedHourlyRate,
+          numberOfWorkers: numberOfWorkers,
           workDate: _workDate,
+          subcontractorCompany: subcontractorCompany.isEmpty ? null : subcontractorCompany,
+          // Legacy fields for backward compatibility
+          description: description,
+          costPerHour: fixedHourlyRate,
+          workerName: subcontractorCompany,
           createdAt: _isEditing ? widget.labor!.createdAt : DateTime.now(),
           updatedAt: DateTime.now(),
-          workCategory: workCategory,
-          fixedHourlyRate: fixedHourlyRate,
-          subcontractorCompany: subcontractorCompany,
-          numberOfWorkers: numberOfWorkers,
-          totalHours: totalHours,
         );
       }
 

@@ -35,6 +35,7 @@ class _MaterialsSectionState extends State<MaterialsSection> {
     try {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
       final materials = await firestoreService.getProjectMaterials(widget.project.id);
+      print('📱 WIDGET: Loaded ${materials.length} materials for project ${widget.project.id}');
       setState(() {
         _materials = materials;
         _isLoading = false;
@@ -197,6 +198,11 @@ class _MaterialsSectionState extends State<MaterialsSection> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                onPressed: _loadMaterials,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh Materials',
               ),
             ],
           ),

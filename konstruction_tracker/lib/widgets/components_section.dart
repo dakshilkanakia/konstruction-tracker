@@ -216,7 +216,38 @@ class ComponentCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // Concrete Information (if applicable)
+              if (component.totalConcrete > 0) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildInfoItem(
+                        context,
+                        'Total Concrete',
+                        '${component.totalConcrete.toStringAsFixed(1)} cu yd',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInfoItem(
+                        context,
+                        'Poured',
+                        '${component.concretePoured.toStringAsFixed(1)} cu yd',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInfoItem(
+                        context,
+                        'Remaining',
+                        '${component.remainingConcrete.toStringAsFixed(1)} cu yd',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 4),
 
               // Area Progress Bar
               Column(
@@ -305,6 +336,69 @@ class ComponentCard extends StatelessWidget {
                   ],
                 ],
               ),
+
+              // Concrete Progress Bar (if applicable)
+              if (component.totalConcrete > 0) ...[
+                const SizedBox(height: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Concrete Progress',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '${(component.concreteProgressPercentage * 100).toStringAsFixed(1)}%',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: component.concretePoured > component.totalConcrete 
+                                ? Colors.red 
+                                : _getConcreteColor(component.concreteProgressPercentage),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: component.concreteProgressPercentage.clamp(0.0, 1.0),
+                      backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                      color: component.concretePoured > component.totalConcrete 
+                          ? Colors.red 
+                          : _getConcreteColor(component.concreteProgressPercentage),
+                    ),
+                    if (component.concretePoured > component.totalConcrete || component.isConcreteWarning) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            component.concretePoured > component.totalConcrete ? Icons.error : Icons.warning,
+                            color: component.concretePoured > component.totalConcrete ? Colors.red : Colors.orange,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              component.concretePoured > component.totalConcrete
+                                  ? 'Concrete exceeded by ${(component.concretePoured - component.totalConcrete).toStringAsFixed(1)} cu yd'
+                                  : 'Concrete warning - ${component.remainingConcrete.toStringAsFixed(1)} cu yd remaining',
+                              style: TextStyle(
+                                color: component.concretePoured > component.totalConcrete ? Colors.red : Colors.orange,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -344,6 +438,13 @@ class ComponentCard extends StatelessWidget {
     if (progress > 0.9) return Colors.red;
     if (progress > 0.8) return Colors.orange;
     if (progress > 0.7) return const Color(0xFFB8860B); // Dark gold
+    return const Color(0xFFFFD700); // Gold
+  }
+
+  Color _getConcreteColor(double progress) {
+    if (progress >= 1.0) return Colors.green;
+    if (progress > 0.8) return Colors.orange;
+    if (progress > 0.5) return const Color(0xFFB8860B); // Dark gold
     return const Color(0xFFFFD700); // Gold
   }
 }

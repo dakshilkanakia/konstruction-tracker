@@ -24,6 +24,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
   final _nameController = TextEditingController();
   final _costController = TextEditingController();
   final _hoursUsedController = TextEditingController();
+  final _totalCostController = TextEditingController();
   final _operatorDetailsController = TextEditingController();
 
   bool _isLoading = false;
@@ -40,9 +41,10 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
 
   void _populateFields() {
     final machinery = widget.machinery!;
-    _nameController.text = machinery.name;
-    _costController.text = machinery.costPerHour.toString();
-    _hoursUsedController.text = machinery.hoursUsed.toString();
+    _nameController.text = machinery.name ?? '';
+    _costController.text = machinery.costPerHour?.toString() ?? '';
+    _hoursUsedController.text = machinery.hoursUsed?.toString() ?? '';
+    _totalCostController.text = machinery.totalCostOverride?.toString() ?? '';
     _operatorDetailsController.text = machinery.operatorName ?? '';
     _isRental = machinery.type == models.MachineryType.rental;
   }
@@ -52,6 +54,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
     _nameController.dispose();
     _costController.dispose();
     _hoursUsedController.dispose();
+    _totalCostController.dispose();
     _operatorDetailsController.dispose();
     super.dispose();
   }
@@ -64,16 +67,25 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
     try {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
       
-      final cost = double.parse(_costController.text);
-      final hoursUsed = double.parse(_hoursUsedController.text);
+      // Parse values only if they're not empty
+      final cost = _costController.text.trim().isEmpty 
+          ? null 
+          : double.tryParse(_costController.text);
+      final hoursUsed = _hoursUsedController.text.trim().isEmpty 
+          ? null 
+          : double.tryParse(_hoursUsedController.text);
+      final totalCostOverride = _totalCostController.text.trim().isEmpty 
+          ? null 
+          : double.tryParse(_totalCostController.text);
 
       final machinery = models.Machinery(
         id: _isEditing ? widget.machinery!.id : const Uuid().v4(),
         projectId: widget.projectId,
-        name: _nameController.text.trim(),
+        name: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
         type: _isRental ? models.MachineryType.rental : models.MachineryType.owned,
         costPerHour: cost,
         hoursUsed: hoursUsed,
+        totalCostOverride: totalCostOverride,
         operatorName: _operatorDetailsController.text.trim().isEmpty ? null : _operatorDetailsController.text.trim(),
         createdAt: _isEditing ? widget.machinery!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
@@ -191,9 +203,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
                   prefixIcon: Icon(Icons.construction),
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter machinery name';
-                  }
+                  // Machinery name is optional
                   return null;
                 },
               ),
@@ -242,12 +252,12 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Total cost
+              // Cost per hour
               TextFormField(
                 controller: _costController,
                 decoration: const InputDecoration(
-                  labelText: 'Total Cost',
-                  hintText: 'e.g., 500.00',
+                  labelText: 'Cost per Hour (Optional)',
+                  hintText: 'e.g., 50.00',
                   prefixIcon: Icon(Icons.attach_money),
                 ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -255,12 +265,12 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                 ],
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter total cost';
-                  }
-                  final cost = double.tryParse(value);
-                  if (cost == null || cost < 0) {
-                    return 'Please enter a valid cost';
+                  // Cost per hour is optional, but if provided, must be valid
+                  if (value != null && value.trim().isNotEmpty) {
+                    final cost = double.tryParse(value);
+                    if (cost == null || cost < 0) {
+                      return 'Please enter a valid cost per hour';
+                    }
                   }
                   return null;
                 },
@@ -280,12 +290,37 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                 ],
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter hours used';
+                  // Hours are optional, but if provided, must be valid
+                  if (value != null && value.trim().isNotEmpty) {
+                    final hours = double.tryParse(value);
+                    if (hours == null || hours < 0) {
+                      return 'Please enter a valid number of hours';
+                    }
                   }
-                  final hours = double.tryParse(value);
-                  if (hours == null || hours < 0) {
-                    return 'Please enter a valid number of hours';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Total cost override
+              TextFormField(
+                controller: _totalCostController,
+                decoration: const InputDecoration(
+                  labelText: 'Total Cost (Optional)',
+                  hintText: 'e.g., 2500.00 - Use this if you want to specify total cost directly',
+                  prefixIcon: Icon(Icons.monetization_on),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                validator: (value) {
+                  // Total cost is optional, but if provided, must be valid
+                  if (value != null && value.trim().isNotEmpty) {
+                    final cost = double.tryParse(value);
+                    if (cost == null || cost < 0) {
+                      return 'Please enter a valid total cost';
+                    }
                   }
                   return null;
                 },
@@ -305,9 +340,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
               const SizedBox(height: 24),
 
               // Cost preview
-              if (_costController.text.isNotEmpty && 
-                  _hoursUsedController.text.isNotEmpty)
-                _buildCostPreview(),
+              _buildCostPreview(),
 
               const SizedBox(height: 24),
 
@@ -373,9 +406,26 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
   }
 
   Widget _buildCostPreview() {
-    final cost = double.tryParse(_costController.text) ?? 0;
-    final hoursUsed = double.tryParse(_hoursUsedController.text) ?? 0;
-    final costPerHour = hoursUsed > 0 ? cost / hoursUsed : 0;
+    final costPerHour = double.tryParse(_costController.text);
+    final hoursUsed = double.tryParse(_hoursUsedController.text);
+    final totalCostOverride = double.tryParse(_totalCostController.text);
+    
+    // Calculate total cost based on the logic
+    double? calculatedTotal;
+    String calculationMethod = '';
+    
+    if (costPerHour != null && hoursUsed != null) {
+      calculatedTotal = costPerHour * hoursUsed;
+      calculationMethod = 'Calculated: $costPerHour × $hoursUsed hours';
+    } else if (totalCostOverride != null) {
+      calculatedTotal = totalCostOverride;
+      calculationMethod = 'Direct total cost';
+    }
+    
+    // Don't show preview if no cost information is available
+    if (calculatedTotal == null || calculatedTotal == 0) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -408,18 +458,18 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Total Cost: \$${cost.toStringAsFixed(2)}',
+            'Total Cost: \$${calculatedTotal.toStringAsFixed(2)}',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (hoursUsed > 0)
-            Text(
-              'Cost per hour: \$${costPerHour.toStringAsFixed(2)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
+          const SizedBox(height: 4),
+          Text(
+            calculationMethod,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
             ),
+          ),
         ],
       ),
     );

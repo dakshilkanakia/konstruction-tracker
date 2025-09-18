@@ -15,7 +15,9 @@ class MachineryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final costPerHour = machinery.hoursUsed > 0 ? machinery.totalCost / machinery.hoursUsed : 0.0;
+    final hoursUsed = machinery.hoursUsed ?? 0.0;
+    final totalCost = machinery.totalCost;
+    final costPerHour = hoursUsed > 0 ? totalCost / hoursUsed : 0.0;
     
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -32,7 +34,7 @@ class MachineryCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      machinery.name,
+                      machinery.name ?? 'Unnamed Machinery',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -69,7 +71,7 @@ class MachineryCard extends StatelessWidget {
                     child: _buildInfoItem(
                       context,
                       'Hours Used',
-                      '${machinery.hoursUsed.toStringAsFixed(1)} hrs',
+                      '${hoursUsed.toStringAsFixed(1)} hrs',
                       Icons.schedule,
                     ),
                   ),
@@ -86,7 +88,7 @@ class MachineryCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Cost per hour
-              if (machinery.hoursUsed > 0)
+              if (hoursUsed > 0)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
