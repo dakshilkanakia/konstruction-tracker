@@ -26,6 +26,11 @@ class Labor {
   final double? fixedHourlyRate; // Fixed hourly rate for non-contracted
   final int? numberOfWorkers; // Number of workers
   final String? workSetupId; // Links to the work setup this progress belongs to (non-contracted)
+  final double? completedArea; // Area completed in work progress (for existing components)
+  
+  // Work setup fields for existing components
+  final double? remainingArea; // Remaining area for existing component work setup
+  final double? remainingBudget; // Remaining budget for existing component work setup
   
   // Legacy fields (keeping for backward compatibility)
   final String? description;
@@ -58,6 +63,11 @@ class Labor {
     this.fixedHourlyRate,
     this.numberOfWorkers,
     this.workSetupId,
+    this.completedArea,
+    
+    // Work setup fields for existing components
+    this.remainingArea,
+    this.remainingBudget,
     
     // Legacy fields
     this.description,
@@ -72,10 +82,8 @@ class Labor {
   double get totalCost {
     if (type == LaborType.contracted) {
       if (entryType == LaborEntryType.contract) {
-        // Contract setup: total contract value
-        if (ratePerSqFt != null && totalSqFt != null) {
-          return ratePerSqFt! * totalSqFt!;
-        }
+        // Contract setup: $0 (just budget allocation, no actual work done yet)
+        return 0.0;
       } else if (entryType == LaborEntryType.progress) {
         // Progress entry: cost for completed work
         if (ratePerSqFt != null && completedSqFt != null) {
@@ -85,10 +93,8 @@ class Labor {
     } else {
       // Non-contracted work
       if (entryType == LaborEntryType.contract) {
-        // Work setup: total budget value
-        if (totalBudget != null) {
-          return totalBudget!;
-        }
+        // Work setup: $0 (just budget allocation, no actual work done yet)
+        return 0.0;
       } else if (entryType == LaborEntryType.progress) {
         // Work progress: fixed rate × hours worked
         if (fixedHourlyRate != null && hoursWorked != null) {
@@ -103,6 +109,29 @@ class Labor {
     }
     
     return 0.0;
+  }
+
+  // Get the total contract/work setup value (for display purposes)
+  double get totalValue {
+    if (type == LaborType.contracted) {
+      if (entryType == LaborEntryType.contract) {
+        // Contract setup: total contract value
+        if (ratePerSqFt != null && totalSqFt != null) {
+          return ratePerSqFt! * totalSqFt!;
+        }
+      }
+    } else {
+      // Non-contracted work
+      if (entryType == LaborEntryType.contract) {
+        // Work setup: total budget value
+        if (totalBudget != null) {
+          return totalBudget!;
+        }
+      }
+    }
+    
+    // For progress entries, return the same as totalCost
+    return totalCost;
   }
 
   String get typeString => type == LaborType.contracted ? 'Contracted' : 'Non-Contracted';
@@ -175,6 +204,11 @@ class Labor {
       'fixedHourlyRate': fixedHourlyRate,
       'numberOfWorkers': numberOfWorkers,
       'workSetupId': workSetupId,
+      'completedArea': completedArea,
+      
+      // Work setup fields for existing components
+      'remainingArea': remainingArea,
+      'remainingBudget': remainingBudget,
       
       // Legacy fields
       'description': description,
@@ -210,6 +244,11 @@ class Labor {
       fixedHourlyRate: map['fixedHourlyRate']?.toDouble(),
       numberOfWorkers: map['numberOfWorkers'],
       workSetupId: map['workSetupId'],
+      completedArea: map['completedArea']?.toDouble(),
+      
+      // Work setup fields for existing components
+      remainingArea: map['remainingArea']?.toDouble(),
+      remainingBudget: map['remainingBudget']?.toDouble(),
       
       // Legacy fields
       description: map['description'],
@@ -244,6 +283,11 @@ class Labor {
     double? fixedHourlyRate,
     int? numberOfWorkers,
     String? workSetupId,
+    double? completedArea,
+    
+    // Work setup fields for existing components
+    double? remainingArea,
+    double? remainingBudget,
     
     // Legacy fields
     String? description,
@@ -276,6 +320,11 @@ class Labor {
       fixedHourlyRate: fixedHourlyRate ?? this.fixedHourlyRate,
       numberOfWorkers: numberOfWorkers ?? this.numberOfWorkers,
       workSetupId: workSetupId ?? this.workSetupId,
+      completedArea: completedArea ?? this.completedArea,
+      
+      // Work setup fields for existing components
+      remainingArea: remainingArea ?? this.remainingArea,
+      remainingBudget: remainingBudget ?? this.remainingBudget,
       
       // Legacy fields
       description: description ?? this.description,

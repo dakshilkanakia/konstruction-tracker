@@ -96,7 +96,6 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
           await firestoreService.syncLaborProgressToComponent(
             widget.project.id,
             widget.contract.workCategory,
-            completedSqFt: completedSqFt,
           );
           
           ScaffoldMessenger.of(context).showSnackBar(

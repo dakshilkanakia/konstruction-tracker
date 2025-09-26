@@ -10,6 +10,9 @@ class Project {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isArchived;
+  final List<Map<String, dynamic>> notes;
+  final double? materialsBudget;
+  final double? machineryBudget;
 
   Project({
     required this.id,
@@ -21,6 +24,9 @@ class Project {
     required this.createdAt,
     required this.updatedAt,
     this.isArchived = false,
+    this.notes = const [],
+    this.materialsBudget,
+    this.machineryBudget,
   });
 
   // Calculate used budget (will be implemented with components and materials)
@@ -43,6 +49,9 @@ class Project {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'isArchived': isArchived,
+      'notes': notes,
+      'materialsBudget': materialsBudget,
+      'machineryBudget': machineryBudget,
     };
   }
 
@@ -57,6 +66,9 @@ class Project {
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
       isArchived: map['isArchived'] ?? false,
+      notes: List<Map<String, dynamic>>.from(map['notes'] ?? []),
+      materialsBudget: map['materialsBudget']?.toDouble(),
+      machineryBudget: map['machineryBudget']?.toDouble(),
     );
   }
 
@@ -70,6 +82,9 @@ class Project {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isArchived,
+    List<Map<String, dynamic>>? notes,
+    double? materialsBudget,
+    double? machineryBudget,
   }) {
     return Project(
       id: id ?? this.id,
@@ -81,6 +96,9 @@ class Project {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isArchived: isArchived ?? this.isArchived,
+      notes: notes ?? this.notes,
+      materialsBudget: materialsBudget ?? this.materialsBudget,
+      machineryBudget: machineryBudget ?? this.machineryBudget,
     );
   }
 }

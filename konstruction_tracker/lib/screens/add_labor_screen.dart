@@ -30,7 +30,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
   final _subcontractorController = TextEditingController();
   final _numberOfWorkersController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   bool _isLoading = false;
   LaborType _laborType = LaborType.contracted;
   DateTime _workDate = DateTime.now();
@@ -109,7 +109,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
         labor = Labor(
           id: _isEditing ? widget.labor!.id : const Uuid().v4(),
           projectId: widget.project.id,
-          type: _laborType,
+        type: _laborType,
           entryType: LaborEntryType.progress, // Default to progress entry
           workCategory: workCategory,
           ratePerSqFt: ratePerSqFt,
@@ -121,9 +121,9 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
           hoursWorked: totalHours,
           costPerHour: ratePerSqFt,
           workerName: subcontractorCompany,
-          createdAt: _isEditing ? widget.labor!.createdAt : DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
+        createdAt: _isEditing ? widget.labor!.createdAt : DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
       } else {
         // Non-contracted work
         final fixedHourlyRate = double.parse(_fixedHourlyRateController.text);
@@ -165,7 +165,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
           ),
         );
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isEditing 
                 ? 'Failed to update labor entry' 
@@ -173,16 +173,16 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } catch (e) {
+        }
+      } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
-        );
+          );
       }
     }
   }
@@ -215,7 +215,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
             Card(
               color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Icon(
@@ -224,9 +224,9 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                           Text(
                             'Project',
                             style: Theme.of(context).textTheme.bodySmall,
@@ -276,7 +276,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
                             'Non-Contracted Work',
                             Icons.person,
                             LaborType.nonContracted,
-                            const Color(0xFFFFD700),
+                            Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ],
@@ -316,9 +316,9 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: _selectWorkDate,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
             // Contracted Work Fields
             if (_laborType == LaborType.contracted) ...[
@@ -412,36 +412,36 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
             ],
 
             // Total Hours
-            TextFormField(
+              TextFormField(
               controller: _totalHoursController,
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
-              decoration: const InputDecoration(
+                decoration: const InputDecoration(
                 labelText: 'Total Hours *',
-                hintText: 'e.g., 8.5',
+                  hintText: 'e.g., 8.5',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.schedule),
+                  prefixIcon: Icon(Icons.schedule),
                 suffixText: 'hours',
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
                   return 'Please enter total hours';
-                }
-                final hours = double.tryParse(value);
-                if (hours == null || hours <= 0) {
-                  return 'Please enter a valid number of hours';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
+                  }
+                  final hours = double.tryParse(value);
+                  if (hours == null || hours <= 0) {
+                    return 'Please enter a valid number of hours';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
 
             // Subcontractor Company
-            TextFormField(
+              TextFormField(
               controller: _subcontractorController,
-              decoration: const InputDecoration(
+                decoration: const InputDecoration(
                 labelText: 'Subcontractor Company *',
                 hintText: 'e.g., ABC Construction Co.',
                 border: OutlineInputBorder(),
@@ -460,7 +460,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
             TextFormField(
               controller: _numberOfWorkersController,
               keyboardType: TextInputType.number,
-              inputFormatters: [
+                inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
               ],
               decoration: const InputDecoration(
@@ -469,49 +469,49 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.people),
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
                   return 'Please enter number of workers';
                 }
                 final workers = int.tryParse(value);
                 if (workers == null || workers <= 0) {
                   return 'Please enter a valid number of workers';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Description
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (Optional)',
-                hintText: 'e.g., Concrete pouring, Framing work, etc.',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.description),
+                  }
+                  return null;
+                },
               ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Description
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description (Optional)',
+                  hintText: 'e.g., Concrete pouring, Framing work, etc.',
+                border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.description),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 24),
 
             // Cost Preview
-            _buildCostPreview(),
-            const SizedBox(height: 24),
+                _buildCostPreview(),
+              const SizedBox(height: 24),
 
             // Save Button
             ElevatedButton(
-              onPressed: _isLoading ? null : _saveLabor,
+                  onPressed: _isLoading ? null : _saveLabor,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_isEditing ? 'Update Labor Entry' : 'Add Labor Entry'),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_isEditing ? 'Update Labor Entry' : 'Add Labor Entry'),
             ),
             const SizedBox(height: 16),
 
@@ -520,9 +520,9 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
               '* Required fields\n\nFor contracted work, cost is calculated as: Rate per Sq Ft × Work Area\nFor non-contracted work, cost is calculated as: Fixed Rate × Total Hours',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
               ),
-            ),
-          ],
+            ],
         ),
       ),
     );
@@ -590,34 +590,34 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.calculate,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.calculate,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Cost Preview',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary,
-                  size: 20,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Cost Preview',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
               'Total Cost: \$${totalCost.toStringAsFixed(2)}',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              fontWeight: FontWeight.bold,
             ),
+          ),
             const SizedBox(height: 4),
             Text(
               calculationText,
@@ -684,7 +684,7 @@ class _AddLaborScreenState extends State<AddLaborScreen> {
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
-          ),
+            ),
         ],
       ),
     );

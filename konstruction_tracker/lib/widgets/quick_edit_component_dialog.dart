@@ -5,6 +5,16 @@ import '../models/component.dart';
 import '../models/project.dart';
 import '../services/firestore_service.dart';
 
+class LaborProgressData {
+  final double minCompletedArea;
+  final double minAmountUsed;
+  
+  LaborProgressData({
+    required this.minCompletedArea,
+    required this.minAmountUsed,
+  });
+}
+
 class QuickEditComponentDialog extends StatefulWidget {
   final Component component;
   final Project project;
@@ -68,6 +78,34 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
     final completedArea = double.parse(_completedAreaController.text);
     final amountUsed = double.parse(_amountUsedController.text.isEmpty ? '0' : _amountUsedController.text);
     final concretePoured = double.parse(_concretePouredController.text.isEmpty ? '0' : _concretePouredController.text);
+
+    // Validate against labor progress (only when values are being changed)
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final laborProgress = await _getLaborProgress(firestoreService);
+    
+    // Only validate completed area if it's different from the original
+    if (completedArea != widget.component.completedArea && completedArea < laborProgress.minCompletedArea) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Progress cannot be less than ${laborProgress.minCompletedArea.toStringAsFixed(1)} sq ft'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Only validate amount used if it's different from the original
+    if (amountUsed != widget.component.amountUsed && amountUsed < laborProgress.minAmountUsed) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Amount used cannot be less than \$${laborProgress.minAmountUsed.toStringAsFixed(2)}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     
     // Get values from advanced fields if shown, otherwise use current values
     final name = _showAdvanced ? _nameController.text.trim() : widget.component.name;
@@ -86,8 +124,12 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
       updatedAt: DateTime.now(),
     );
 
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
     final success = await firestoreService.updateComponent(updatedComponent);
+
+    if (success) {
+      // Sync component changes to work setup (if exists)
+      await firestoreService.syncComponentToWorkSetup(widget.project.id, updatedComponent.name);
+    }
 
     setState(() => _isLoading = false);
 
@@ -105,6 +147,38 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
           content: Text('Failed to update component'),
           backgroundColor: Colors.red,
         ),
+      );
+    }
+  }
+
+  Future<LaborProgressData> _getLaborProgress(FirestoreService firestoreService) async {
+    try {
+      final allLabor = await firestoreService.getProjectLabor(widget.project.id);
+      
+      // Get all labor entries for this component
+      final componentLabor = allLabor.where((l) => l.workCategory == widget.component.name).toList();
+      
+      // Calculate minimum completed area from contract progress
+      final contractProgressEntries = componentLabor
+          .where((l) => l.isProgress && l.isContracted)
+          .toList();
+      
+      final minCompletedArea = contractProgressEntries
+          .fold(0.0, (sum, entry) => sum + (entry.completedSqFt ?? 0.0));
+      
+      // Calculate minimum amount used from all labor costs
+      final minAmountUsed = componentLabor
+          .fold(0.0, (sum, entry) => sum + entry.totalCost);
+      
+      return LaborProgressData(
+        minCompletedArea: minCompletedArea,
+        minAmountUsed: minAmountUsed,
+      );
+    } catch (e) {
+      // If error, return zeros (no minimum validation)
+      return LaborProgressData(
+        minCompletedArea: 0.0,
+        minAmountUsed: 0.0,
       );
     }
   }
@@ -248,7 +322,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                       decoration: const InputDecoration(
                         labelText: 'Component Name *',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.build),
+                        prefixIcon: Icon(Icons.business),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -321,7 +395,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                       decoration: const InputDecoration(
                         labelText: 'Total Concrete',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.construction),
+                        prefixIcon: Icon(Icons.local_shipping),
                         suffixText: 'cu yd',
                       ),
                       validator: (value) {
@@ -435,13 +509,8 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                           return 'Please enter a valid concrete amount';
                         }
                         
-                        final totalConcrete = _showAdvanced 
-                            ? double.tryParse(_totalConcreteController.text) ?? widget.component.totalConcrete
-                            : widget.component.totalConcrete;
-                        
-                        if (poured > totalConcrete) {
-                          return 'Concrete poured cannot exceed total concrete';
-                        }
+                        // Allow concrete poured to exceed total concrete (overpour is allowed)
+                        // No validation error, just allow the value
                       }
                       return null;
                     },
@@ -682,14 +751,14 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
     final exceededItems = <String>[];
     if (isAreaExceeded) exceededItems.add('area');
     if (isBudgetExceeded) exceededItems.add('budget');
-    if (isConcreteExceeded) exceededItems.add('concrete');
+    // Concrete overpour is now allowed, so don't add to exceeded items
     
     if (exceededItems.length == 1) {
       return '${exceededItems[0].substring(0, 1).toUpperCase()}${exceededItems[0].substring(1)} limit exceeded';
     } else if (exceededItems.length == 2) {
       return '${exceededItems[0].substring(0, 1).toUpperCase()}${exceededItems[0].substring(1)} and ${exceededItems[1]} limits exceeded';
     } else {
-      return 'Area, budget, and concrete limits exceeded';
+      return 'Area and budget limits exceeded';
     }
   }
 }

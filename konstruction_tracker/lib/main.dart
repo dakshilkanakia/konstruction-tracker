@@ -54,64 +54,66 @@ class KonstructionApp extends StatelessWidget {
   }
 }
 
-// Gold and Black Theme Configuration
+// Professional Blue & Gray Theme Configuration (Preview)
 ThemeData _buildLightTheme() {
-  const Color goldColor = Color(0xFFFFD700); // Pure gold
-  const Color darkGoldColor = Color(0xFFB8860B); // Dark goldenrod
-  const Color lightGoldColor = Color(0xFFFFF8DC); // Cornsilk
+  const Color primaryBlue = Color(0xFF1976D2); // Deep blue
+  const Color secondaryGray = Color(0xFF546E7A); // Warm gray
+  const Color lightBackground = Color(0xFFFAFAFA); // Light gray background
   
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
     colorScheme: const ColorScheme.light(
-      primary: goldColor,
-      onPrimary: Colors.black,
-      primaryContainer: lightGoldColor,
-      onPrimaryContainer: Colors.black,
-      secondary: darkGoldColor,
+      primary: primaryBlue,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFFE3F2FD), // Light blue container
+      onPrimaryContainer: primaryBlue,
+      secondary: secondaryGray,
       onSecondary: Colors.white,
       surface: Colors.white,
-      onSurface: Colors.black,
-      surfaceVariant: Color(0xFFFAFAFA),
-      onSurfaceVariant: Colors.black54,
-      outline: darkGoldColor,
+      onSurface: Color(0xFF212121), // Dark gray text
+      surfaceVariant: lightBackground,
+      onSurfaceVariant: secondaryGray,
+      outline: Color(0xFFBDBDBD), // Light gray outline
+      error: Color(0xFFD32F2F), // Red for errors
+      onError: Colors.white,
     ),
     appBarTheme: const AppBarTheme(
       centerTitle: true,
       elevation: 2,
       backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      surfaceTintColor: goldColor,
+      foregroundColor: primaryBlue,
+      surfaceTintColor: primaryBlue,
     ),
     cardTheme: CardThemeData(
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      surfaceTintColor: lightGoldColor,
+      surfaceTintColor: Color(0xFFE3F2FD), // Light blue tint
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: goldColor,
-        foregroundColor: Colors.black,
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
       ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: goldColor,
-      foregroundColor: Colors.black,
+      backgroundColor: primaryBlue,
+      foregroundColor: Colors.white,
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: goldColor,
+      color: primaryBlue,
     ),
   );
 }
 
 ThemeData _buildDarkTheme() {
-  const Color goldColor = Color(0xFFFFD700); // Pure gold
-  const Color darkGoldColor = Color(0xFFB8860B); // Dark goldenrod
+  const Color primaryBlue = Color(0xFF1976D2); // Deep blue
+  const Color secondaryGray = Color(0xFF546E7A); // Warm gray
   const Color darkBackground = Color(0xFF121212); // Material dark background
   const Color darkSurface = Color(0xFF1E1E1E); // Slightly lighter dark
   
@@ -119,26 +121,28 @@ ThemeData _buildDarkTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: const ColorScheme.dark(
-      primary: goldColor,
-      onPrimary: Colors.black,
-      primaryContainer: Color(0xFF2A2A2A),
-      onPrimaryContainer: goldColor,
-      secondary: darkGoldColor,
-      onSecondary: Colors.black,
+      primary: primaryBlue,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFF0D47A1), // Darker blue container
+      onPrimaryContainer: Color(0xFFBBDEFB), // Light blue text
+      secondary: secondaryGray,
+      onSecondary: Colors.white,
       surface: darkSurface,
       onSurface: Colors.white,
       surfaceVariant: Color(0xFF2C2C2C),
       onSurfaceVariant: Colors.white70,
-      outline: goldColor,
+      outline: Color(0xFF757575), // Medium gray outline
       background: darkBackground,
       onBackground: Colors.white,
+      error: Color(0xFFD32F2F), // Red for errors
+      onError: Colors.white,
     ),
     appBarTheme: const AppBarTheme(
       centerTitle: true,
       elevation: 2,
       backgroundColor: darkBackground,
-      foregroundColor: goldColor,
-      surfaceTintColor: goldColor,
+      foregroundColor: primaryBlue,
+      surfaceTintColor: primaryBlue,
     ),
     cardTheme: CardThemeData(
       elevation: 4,
@@ -146,23 +150,23 @@ ThemeData _buildDarkTheme() {
         borderRadius: BorderRadius.circular(12),
       ),
       color: darkSurface,
-      surfaceTintColor: goldColor,
+      surfaceTintColor: primaryBlue,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: goldColor,
-        foregroundColor: Colors.black,
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
       ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: goldColor,
-      foregroundColor: Colors.black,
+      backgroundColor: primaryBlue,
+      foregroundColor: Colors.white,
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: goldColor,
+      color: primaryBlue,
     ),
   );
 }

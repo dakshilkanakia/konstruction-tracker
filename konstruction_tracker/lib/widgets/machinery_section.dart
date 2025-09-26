@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../models/machinery.dart' as models;
+import '../models/project.dart';
 import '../services/firestore_service.dart';
 import '../screens/add_machinery_screen.dart';
 import 'machinery_card.dart';
+import 'machinery_budget_card.dart';
 
 class MachinerySection extends StatefulWidget {
-  final String projectId;
+  final Project project;
+  final VoidCallback? onRefresh;
 
   const MachinerySection({
     super.key,
-    required this.projectId,
+    required this.project,
+    this.onRefresh,
   });
 
   @override
@@ -31,7 +36,7 @@ class _MachinerySectionState extends State<MachinerySection> {
     setState(() => _isLoading = true);
     try {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-      final machinery = await firestoreService.getProjectMachinery(widget.projectId);
+      final machinery = await firestoreService.getProjectMachinery(widget.project.id);
       setState(() {
         _machinery = machinery;
         _isLoading = false;
@@ -50,12 +55,13 @@ class _MachinerySectionState extends State<MachinerySection> {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => AddMachineryScreen(projectId: widget.projectId),
+        builder: (context) => AddMachineryScreen(projectId: widget.project.id),
       ),
     );
     
     if (result == true) {
       _loadMachinery();
+      widget.onRefresh?.call(); // Notify parent to refresh project data
     }
   }
 
@@ -64,7 +70,7 @@ class _MachinerySectionState extends State<MachinerySection> {
       context,
       MaterialPageRoute(
         builder: (context) => AddMachineryScreen(
-          projectId: widget.projectId,
+          projectId: widget.project.id,
           machinery: machinery,
         ),
       ),
@@ -72,6 +78,7 @@ class _MachinerySectionState extends State<MachinerySection> {
     
     if (result == true) {
       _loadMachinery();
+      widget.onRefresh?.call(); // Notify parent to refresh project data
     }
   }
 
@@ -100,6 +107,7 @@ class _MachinerySectionState extends State<MachinerySection> {
         final firestoreService = Provider.of<FirestoreService>(context, listen: false);
         await firestoreService.deleteMachinery(machinery.id);
         _loadMachinery();
+        widget.onRefresh?.call(); // Notify parent to refresh project data
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Machinery deleted successfully')),
@@ -122,43 +130,71 @@ class _MachinerySectionState extends State<MachinerySection> {
     }
 
     if (_machinery.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.construction_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Machinery Added',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+      return Column(
+        children: [
+          // Machinery Budget Card (even when no machinery)
+          MachineryBudgetCard(
+            project: widget.project,
+            machinery: _machinery,
+            onRefresh: widget.onRefresh,
+          ),
+          const SizedBox(height: 16),
+          
+          // Empty state
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.local_shipping_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Machinery Added',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add machinery to track equipment usage and costs',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _addMachinery,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add First Machinery'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Add machinery to track equipment usage and costs',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _addMachinery,
-              icon: const Icon(Icons.add),
-              label: const Text('Add First Machinery'),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
+    if (kDebugMode) {
+      print('🚛 MachinerySection: Building with project machineryBudget = ${widget.project.machineryBudget}');
+      print('🚛 MachinerySection: Machinery count = ${_machinery.length}');
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Machinery Budget Card
+        MachineryBudgetCard(
+          project: widget.project,
+          machinery: _machinery,
+          onRefresh: widget.onRefresh,
+        ),
+        const SizedBox(height: 16),
+        
         // Header with stats
         Container(
           padding: const EdgeInsets.all(16),
@@ -169,7 +205,7 @@ class _MachinerySectionState extends State<MachinerySection> {
           child: Row(
             children: [
               Icon(
-                Icons.construction,
+                Icons.local_shipping,
                 color: Theme.of(context).colorScheme.primary,
                 size: 24,
               ),

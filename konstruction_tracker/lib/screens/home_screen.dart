@@ -55,6 +55,17 @@ class _HomeScreenState extends State<HomeScreen> {
     ).then((_) => _loadProjects());
   }
 
+  void _showEditProject(Project project) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => CreateProjectScreen(project: project)),
+    ).then((result) {
+      if (result == true) {
+        _loadProjects();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           },
+          onEdit: () => _showEditProject(projectsToShow[index]),
           onArchiveToggle: () async {
             // TODO: Implement archive toggle
             ScaffoldMessenger.of(context).showSnackBar(

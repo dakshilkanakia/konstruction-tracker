@@ -56,13 +56,13 @@ class LaborCard extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Text(
+                          Text(
                           'Contract Setup',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -94,7 +94,7 @@ class LaborCard extends StatelessWidget {
                     child: _buildInfoItem(
                       context,
                       'Total Value',
-                      '\$${labor.totalCost.toStringAsFixed(2)}',
+                      '\$${labor.totalValue.toStringAsFixed(2)}',
                       Icons.account_balance_wallet,
                     ),
                   ),
@@ -257,7 +257,7 @@ class LaborCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        _buildTypeChip('Work Setup', Icons.work_history, const Color(0xFFFFD700)),
+                        _buildTypeChip('Work Setup', Icons.work_history, Theme.of(context).colorScheme.primary),
                       ],
                     ),
                   ),
@@ -311,7 +311,7 @@ class LaborCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -440,7 +440,7 @@ class LaborCard extends StatelessWidget {
                             ),
                           ),
                         if (labor.description?.isNotEmpty == true)
-                          Text(
+                        Text(
                             labor.description!,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -451,7 +451,7 @@ class LaborCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _buildTypeChip('Hourly Work', Icons.schedule, const Color(0xFFFFD700)),
+                  _buildTypeChip('Hourly Work', Icons.schedule, Theme.of(context).colorScheme.primary),
                 ],
               ),
               const SizedBox(height: 12),
@@ -481,10 +481,10 @@ class LaborCard extends StatelessWidget {
                       'Total Cost',
                       '\$${labor.totalCost.toStringAsFixed(2)}',
                       Icons.calculate,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 12),
 
               // Worker information and date

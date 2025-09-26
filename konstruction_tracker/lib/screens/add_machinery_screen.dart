@@ -200,7 +200,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Machinery Name',
                   hintText: 'e.g., Excavator, Crane, Concrete Mixer',
-                  prefixIcon: Icon(Icons.construction),
+                  prefixIcon: Icon(Icons.local_shipping),
                 ),
                 validator: (value) {
                   // Machinery name is optional
@@ -233,7 +233,7 @@ class _AddMachineryScreenState extends State<AddMachineryScreen> {
                             'Owned',
                             Icons.business,
                             false,
-                            const Color(0xFFFFD700),
+                            Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 12),

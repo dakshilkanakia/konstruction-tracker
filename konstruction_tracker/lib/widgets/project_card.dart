@@ -6,12 +6,14 @@ class ProjectCard extends StatelessWidget {
   final Project project;
   final VoidCallback onTap;
   final VoidCallback onArchiveToggle;
+  final VoidCallback? onEdit;
 
   const ProjectCard({
     super.key,
     required this.project,
     required this.onTap,
     required this.onArchiveToggle,
+    this.onEdit,
   });
 
   @override
@@ -53,6 +55,15 @@ class ProjectCard extends StatelessWidget {
                   ),
                   PopupMenuButton(
                     itemBuilder: (context) => [
+                      if (onEdit != null)
+                        PopupMenuItem(
+                          child: const ListTile(
+                            leading: Icon(Icons.edit),
+                            title: Text('Edit Project'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onTap: onEdit,
+                        ),
                       PopupMenuItem(
                         child: ListTile(
                           leading: Icon(project.isArchived ? Icons.unarchive : Icons.archive),
@@ -94,43 +105,10 @@ class ProjectCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Budget Progress',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        '${(project.budgetProgress * 100).toStringAsFixed(1)}%',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: _getBudgetColor(context, project.budgetProgress),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: project.budgetProgress,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                    color: _getBudgetColor(context, project.budgetProgress),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Used: ${currencyFormat.format(project.usedBudget)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      Text(
-                        'Total: ${currencyFormat.format(project.totalBudget)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                  Text(
+                    'Budget: ${currencyFormat.format(project.totalBudget)}',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -174,13 +152,4 @@ class ProjectCard extends StatelessWidget {
     );
   }
 
-  Color _getBudgetColor(BuildContext context, double progress) {
-    if (progress <= 0.7) {
-      return Colors.green;
-    } else if (progress <= 0.9) {
-      return Colors.orange;
-    } else {
-      return Colors.red;
-    }
-  }
 }

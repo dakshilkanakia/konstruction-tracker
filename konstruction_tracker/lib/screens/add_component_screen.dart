@@ -2,9 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import '../services/firestore_service.dart';
-import '../models/project.dart';
 import '../models/component.dart';
+import '../models/project.dart';
+import '../services/firestore_service.dart';
+
+class LaborProgressData {
+  final double minCompletedArea;
+  final double minAmountUsed;
+  
+  LaborProgressData({
+    required this.minCompletedArea,
+    required this.minAmountUsed,
+  });
+}
 
 class AddComponentScreen extends StatefulWidget {
   final Project project;
@@ -84,7 +94,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     }
 
     // Validation: amount used cannot exceed component budget
-    if (amountUsed > componentBudget) {
+    if (componentBudget > 0 && amountUsed > componentBudget) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -94,17 +104,58 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       );
       return;
     }
-
-    // Validation: concrete poured cannot exceed total concrete
-    if (concretePoured > totalConcrete) {
+    
+    // For zero budget components, amount used should be zero
+    if (componentBudget == 0 && amountUsed > 0) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Concrete poured cannot exceed total concrete'),
+          content: Text('For zero budget components, amount used must be zero'),
           backgroundColor: Colors.red,
         ),
       );
       return;
+    }
+
+    // Allow concrete poured to exceed total concrete (overpour is allowed)
+    // Show warning if concrete poured exceeds total concrete
+    if (concretePoured > totalConcrete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Warning: Concrete poured (${concretePoured.toStringAsFixed(1)} cu yd) exceeds total concrete (${totalConcrete.toStringAsFixed(1)} cu yd)'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    // Validate against labor progress (only for existing components and when amount used is being changed)
+    if (_isEditing) {
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final laborProgress = await _getLaborProgress(firestoreService, widget.component!.name);
+      
+      // Only validate completed area if it's different from the original
+      if (completedArea != widget.component!.completedArea && completedArea < laborProgress.minCompletedArea) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Progress cannot be less than ${laborProgress.minCompletedArea.toStringAsFixed(1)} sq ft'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      // Only validate amount used if it's different from the original
+      if (amountUsed != widget.component!.amountUsed && amountUsed < laborProgress.minAmountUsed) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Amount used cannot be less than \$${laborProgress.minAmountUsed.toStringAsFixed(2)}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
     }
 
     final component = Component(
@@ -117,6 +168,12 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       amountUsed: amountUsed,
       totalConcrete: totalConcrete,
       concretePoured: concretePoured,
+      originalCompletedArea: _isEditing && completedArea == widget.component!.completedArea 
+          ? widget.component!.originalCompletedArea 
+          : completedArea,
+      originalAmountUsed: _isEditing && amountUsed == widget.component!.amountUsed 
+          ? widget.component!.originalAmountUsed 
+          : amountUsed,
       createdAt: _isEditing ? widget.component!.createdAt : DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -125,6 +182,11 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     final success = _isEditing
         ? await firestoreService.updateComponent(component)
         : await firestoreService.createComponent(component);
+
+    if (success && _isEditing) {
+      // Sync component changes to work setup (if exists) - only for editing, not creating
+      await firestoreService.syncComponentToWorkSetup(component.projectId, component.name);
+    }
 
     setState(() => _isLoading = false);
 
@@ -216,7 +278,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                 labelText: 'Component Name *',
                 hintText: 'e.g., Sidewalk, Heavy duty pavement',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.build),
+                prefixIcon: Icon(Icons.business),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -310,8 +372,8 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                   return 'Please enter component budget';
                 }
                 final budget = double.tryParse(value);
-                if (budget == null || budget <= 0) {
-                  return 'Please enter a valid budget amount';
+                if (budget == null || budget < 0) {
+                  return 'Please enter a valid budget amount (zero is allowed)';
                 }
                 return null;
               },
@@ -346,8 +408,12 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                 final amountUsed = double.tryParse(value);
                 final componentBudget = double.tryParse(_componentBudgetController.text);
                 
-                if (amountUsed != null && componentBudget != null && amountUsed > componentBudget) {
-                  setState(() {});
+                if (amountUsed != null && componentBudget != null) {
+                  if (componentBudget > 0 && amountUsed > componentBudget) {
+                    setState(() {});
+                  } else if (componentBudget == 0 && amountUsed > 0) {
+                    setState(() {});
+                  }
                 }
               },
             ),
@@ -364,7 +430,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                 labelText: 'Total Concrete',
                 hintText: 'Total concrete needed in cubic yards',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.construction),
+                prefixIcon: Icon(Icons.local_shipping),
                 suffixText: 'cu yd',
               ),
               validator: (value) {
@@ -406,12 +472,12 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                 return null;
               },
               onChanged: (value) {
-                // Real-time validation for concrete exceeded
+                // Real-time validation for concrete exceeded (now shows warning instead of error)
                 final concretePoured = double.tryParse(value);
                 final totalConcrete = double.tryParse(_totalConcreteController.text);
                 
                 if (concretePoured != null && totalConcrete != null && concretePoured > totalConcrete) {
-                  setState(() {});
+                  setState(() {}); // Trigger UI update to show warning
                 }
               },
             ),
@@ -606,7 +672,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     
     if (totalConcrete <= 0) return const SizedBox.shrink();
     
-    final progress = (concretePoured / totalConcrete).clamp(0.0, 1.0);
+    final progress = concretePoured / totalConcrete; // Allow progress above 100%
     final isOvercomplete = concretePoured > totalConcrete;
     final isWarning = progress > 0.8 && !isOvercomplete;
     
@@ -650,15 +716,47 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
             const SizedBox(height: 8),
             Text(
               isOvercomplete 
-                  ? 'Concrete poured cannot exceed total concrete'
+                  ? 'Warning: Concrete poured exceeds total by ${(concretePoured - totalConcrete).toStringAsFixed(1)} cu yd'
                   : '${(progress * 100).toStringAsFixed(1)}% Complete • ${(totalConcrete - concretePoured).toStringAsFixed(1)} cu yd remaining',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isOvercomplete ? Colors.red : isWarning ? Colors.orange : null,
+                color: isOvercomplete ? Colors.orange : isWarning ? Colors.orange : null,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<LaborProgressData> _getLaborProgress(FirestoreService firestoreService, String componentName) async {
+    try {
+      final allLabor = await firestoreService.getProjectLabor(widget.project.id);
+      
+      // Get all labor entries for this component
+      final componentLabor = allLabor.where((l) => l.workCategory == componentName).toList();
+      
+      // Calculate minimum completed area from contract progress
+      final contractProgressEntries = componentLabor
+          .where((l) => l.isProgress && l.isContracted)
+          .toList();
+      
+      final minCompletedArea = contractProgressEntries
+          .fold(0.0, (sum, entry) => sum + (entry.completedSqFt ?? 0.0));
+      
+      // Calculate minimum amount used from all labor costs
+      final minAmountUsed = componentLabor
+          .fold(0.0, (sum, entry) => sum + entry.totalCost);
+      
+      return LaborProgressData(
+        minCompletedArea: minCompletedArea,
+        minAmountUsed: minAmountUsed,
+      );
+    } catch (e) {
+      // If error, return zeros (no minimum validation)
+      return LaborProgressData(
+        minCompletedArea: 0.0,
+        minAmountUsed: 0.0,
+      );
+    }
   }
 }

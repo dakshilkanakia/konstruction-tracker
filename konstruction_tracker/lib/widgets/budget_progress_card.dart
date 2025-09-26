@@ -100,7 +100,7 @@ class BudgetProgressCard extends StatelessWidget {
                     context,
                     'Total',
                     currencyFormat.format(totalBudget),
-                    Theme.of(context).colorScheme.onSurface,
+                    Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
@@ -176,7 +176,7 @@ class BudgetProgressCard extends StatelessWidget {
     if (isOverBudget) return Colors.red;
     if (budgetProgress > 0.9) return Colors.red;
     if (budgetProgress > 0.8) return Colors.orange;
-    if (budgetProgress > 0.7) return const Color(0xFFB8860B); // Dark gold
-    return const Color(0xFFFFD700); // Gold
+    if (budgetProgress > 0.7) return const Color(0xFF1976D2); // Primary blue
+    return Colors.green; // Green for good progress
   }
 }

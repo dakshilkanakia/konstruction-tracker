@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../models/component.dart';
 import '../models/labor.dart';
 import '../models/project.dart';
 import '../services/firestore_service.dart';
@@ -25,23 +26,78 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
   final _workCategoryController = TextEditingController();
   final _totalBudgetController = TextEditingController();
   final _hourlyRateController = TextEditingController();
+  final _remainingAreaController = TextEditingController();
+  final _remainingBudgetController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isLoadingComponents = true;
+  List<Component> _components = [];
+  String? _selectedComponent;
   bool get _isEditing => widget.workSetup != null;
+  bool get _isExistingComponent => _selectedComponent != null && _selectedComponent != 'custom';
+  
+  Component? get _selectedComponentData {
+    if (!_isExistingComponent) return null;
+    return _components.where((c) => c.name == _selectedComponent).firstOrNull;
+  }
+  
+  void _updateRemainingValues() {
+    if (_isExistingComponent && _selectedComponentData != null) {
+      final component = _selectedComponentData!;
+      final remainingArea = component.totalArea - component.completedArea;
+      final remainingBudget = component.componentBudget - component.amountUsed;
+      
+      _remainingAreaController.text = remainingArea.toStringAsFixed(1);
+      _remainingBudgetController.text = remainingBudget.toStringAsFixed(2);
+    } else {
+      _remainingAreaController.clear();
+      _remainingBudgetController.clear();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    if (_isEditing) {
-      _populateFields();
-    }
+    _loadComponents();
   }
 
   void _populateFields() {
     final workSetup = widget.workSetup!;
-    _workCategoryController.text = workSetup.workCategory;
     _totalBudgetController.text = workSetup.totalBudget?.toString() ?? '';
     _hourlyRateController.text = workSetup.fixedHourlyRate?.toString() ?? '';
+    _remainingAreaController.text = workSetup.remainingArea?.toString() ?? '';
+    _remainingBudgetController.text = workSetup.remainingBudget?.toString() ?? '';
+    
+    // Check if work category matches an existing component
+    final matchingComponent = _components.where((c) => c.name == workSetup.workCategory).firstOrNull;
+    if (matchingComponent != null) {
+      _selectedComponent = workSetup.workCategory;
+    } else {
+      _selectedComponent = 'custom';
+      _workCategoryController.text = workSetup.workCategory;
+    }
+  }
+
+  Future<void> _loadComponents() async {
+    try {
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final components = await firestoreService.getProjectComponents(widget.project.id);
+      setState(() {
+        _components = components;
+        _isLoadingComponents = false;
+        
+        if (_isEditing) {
+          _populateFields();
+        }
+      });
+    } catch (e) {
+      setState(() => _isLoadingComponents = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading components: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -49,11 +105,21 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
     _workCategoryController.dispose();
     _totalBudgetController.dispose();
     _hourlyRateController.dispose();
+    _remainingAreaController.dispose();
+    _remainingBudgetController.dispose();
     super.dispose();
   }
 
   Future<void> _saveWorkSetup() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate component selection
+    if (_selectedComponent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a component')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -63,14 +129,26 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
       final totalBudget = double.tryParse(_totalBudgetController.text) ?? 0.0;
       final hourlyRate = double.tryParse(_hourlyRateController.text) ?? 0.0;
 
+      // Get values based on component type
+      final remainingArea = _isExistingComponent 
+          ? double.tryParse(_remainingAreaController.text) ?? 0.0
+          : null;
+      final remainingBudget = _isExistingComponent 
+          ? double.tryParse(_remainingBudgetController.text) ?? 0.0
+          : null;
+
       final workSetup = Labor(
         id: _isEditing ? widget.workSetup!.id : const Uuid().v4(),
         projectId: widget.project.id,
         type: LaborType.nonContracted,
         entryType: LaborEntryType.contract, // Work setup uses "contract" entry type
-        workCategory: _workCategoryController.text.trim(),
-        totalBudget: totalBudget,
-        fixedHourlyRate: hourlyRate,
+        workCategory: _selectedComponent == 'custom' 
+            ? _workCategoryController.text.trim()
+            : _selectedComponent!,
+        totalBudget: _isExistingComponent ? null : totalBudget,
+        fixedHourlyRate: _isExistingComponent ? null : hourlyRate,
+        remainingArea: remainingArea,
+        remainingBudget: remainingBudget,
         createdAt: _isEditing ? widget.workSetup!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -82,6 +160,14 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
       if (_isEditing) {
         success = await firestoreService.updateLabor(workSetup);
         print('💾 WORK_SETUP_SCREEN: Update result: $success');
+        
+        // Sync component after work setup update
+        if (success) {
+          await firestoreService.syncLaborProgressToComponent(
+            widget.project.id,
+            workSetup.workCategory,
+          );
+        }
       } else {
         success = await firestoreService.createLabor(workSetup);
         print('💾 WORK_SETUP_SCREEN: Create result: $success');
@@ -182,79 +268,193 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Work Category - Simple Text Input
-              TextFormField(
-                controller: _workCategoryController,
-                decoration: const InputDecoration(
-                  labelText: 'Work Category',
-                  hintText: 'e.g., General Labor, Cleanup, Maintenance',
-                  prefixIcon: Icon(Icons.category),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter work category';
-                  }
-                  return null;
-                },
+              // Work Category - Component Dropdown
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isLoadingComponents) ...[
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Loading components...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ] else ...[
+                    // Component Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).colorScheme.outline),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedComponent,
+                          hint: const Text('Select Component'),
+                          isExpanded: true,
+                          items: [
+                            // Existing components
+                            ..._components.map((component) => DropdownMenuItem<String>(
+                              value: component.name,
+                              child: Text(component.name),
+                            )),
+                            // Custom option
+                            const DropdownMenuItem<String>(
+                              value: 'custom',
+                              child: Text('Custom Component'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedComponent = value;
+                              if (value != 'custom') {
+                                _workCategoryController.clear();
+                              }
+                              _updateRemainingValues();
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    // Custom component text field (shown when "Custom Component" is selected)
+                    if (_selectedComponent == 'custom') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _workCategoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Custom Component Name',
+                          hintText: 'Enter custom component name',
+                          prefixIcon: Icon(Icons.edit),
+                        ),
+                        validator: (value) {
+                          if (_selectedComponent == 'custom' && (value == null || value.trim().isEmpty)) {
+                            return 'Please enter custom component name';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ],
+                ],
               ),
               const SizedBox(height: 16),
 
-              // Total Budget
-              TextFormField(
-                controller: _totalBudgetController,
-                decoration: const InputDecoration(
-                  labelText: 'Total Budget',
-                  hintText: 'e.g., 1000',
-                  prefixIcon: Icon(Icons.account_balance_wallet),
-                  prefixText: '\$',
+              // Conditional Fields based on component selection
+              if (_isExistingComponent) ...[
+                // Remaining Area (for existing components)
+                TextFormField(
+                  controller: _remainingAreaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Remaining Area',
+                    hintText: 'e.g., 100.0',
+                    prefixIcon: Icon(Icons.square_foot),
+                    suffixText: 'sq ft',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter remaining area';
+                    }
+                    final area = double.tryParse(value);
+                    if (area == null || area <= 0) {
+                      return 'Please enter a valid area';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for preview
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter total budget';
-                  }
-                  final budget = double.tryParse(value);
-                  if (budget == null || budget <= 0) {
-                    return 'Please enter a valid budget';
-                  }
-                  return null;
-                },
-                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Fixed Hourly Rate
-              TextFormField(
-                controller: _hourlyRateController,
-                decoration: const InputDecoration(
-                  labelText: 'Fixed Hourly Rate',
-                  hintText: 'e.g., 15.00',
-                  prefixIcon: Icon(Icons.attach_money),
-                  suffixText: '/ hour',
+                // Remaining Budget (for existing components)
+                TextFormField(
+                  controller: _remainingBudgetController,
+                  decoration: const InputDecoration(
+                    labelText: 'Remaining Budget',
+                    hintText: 'e.g., 1000.00',
+                    prefixIcon: Icon(Icons.account_balance_wallet),
+                    prefixText: '\$',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter remaining budget';
+                    }
+                    final budget = double.tryParse(value);
+                    if (budget == null || budget <= 0) {
+                      return 'Please enter a valid budget';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for preview
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter hourly rate';
-                  }
-                  final rate = double.tryParse(value);
-                  if (rate == null || rate <= 0) {
-                    return 'Please enter a valid hourly rate';
-                  }
-                  return null;
-                },
-                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
-              ),
+              ] else ...[
+                // Total Budget (for custom components)
+                TextFormField(
+                  controller: _totalBudgetController,
+                  decoration: const InputDecoration(
+                    labelText: 'Total Budget',
+                    hintText: 'e.g., 1000',
+                    prefixIcon: Icon(Icons.account_balance_wallet),
+                    prefixText: '\$',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter total budget';
+                    }
+                    final budget = double.tryParse(value);
+                    if (budget == null || budget <= 0) {
+                      return 'Please enter a valid budget';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+                ),
+                const SizedBox(height: 16),
+
+                // Fixed Hourly Rate (for custom components)
+                TextFormField(
+                  controller: _hourlyRateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Fixed Hourly Rate',
+                    hintText: 'e.g., 15.00',
+                    prefixIcon: Icon(Icons.attach_money),
+                    suffixText: '/ hour',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter hourly rate';
+                    }
+                    final rate = double.tryParse(value);
+                    if (rate == null || rate <= 0) {
+                      return 'Please enter a valid hourly rate';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Budget Preview
-              if (maxHours > 0)
+              if ((_isExistingComponent && _remainingBudgetController.text.isNotEmpty) || 
+                  (!_isExistingComponent && maxHours > 0))
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -285,14 +485,19 @@ class _AddWorkSetupScreenState extends State<AddWorkSetupScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      _buildSummaryRow('Total Budget:', '\$${totalBudget.toStringAsFixed(2)}'),
-                      _buildSummaryRow('Hourly Rate:', '\$${hourlyRate.toStringAsFixed(2)} / hour'),
-                      const Divider(),
-                      _buildSummaryRow(
-                        'Max Hours Available:', 
-                        '${maxHours.toStringAsFixed(1)} hours',
-                        isTotal: true,
-                      ),
+                      if (_isExistingComponent) ...[
+                        _buildSummaryRow('Remaining Area:', '${_remainingAreaController.text} sq ft'),
+                        _buildSummaryRow('Remaining Budget:', '\$${_remainingBudgetController.text}'),
+                      ] else ...[
+                        _buildSummaryRow('Total Budget:', '\$${totalBudget.toStringAsFixed(2)}'),
+                        _buildSummaryRow('Hourly Rate:', '\$${hourlyRate.toStringAsFixed(2)} / hour'),
+                        const Divider(),
+                        _buildSummaryRow(
+                          'Max Hours Available:', 
+                          '${maxHours.toStringAsFixed(1)} hours',
+                          isTotal: true,
+                        ),
+                      ],
                     ],
                   ),
                 ),

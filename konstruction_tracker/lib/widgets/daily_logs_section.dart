@@ -32,13 +32,19 @@ class _DailyLogsSectionState extends State<DailyLogsSection> {
     setState(() => _isLoading = true);
     try {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      
+      // Run test to debug the issue
+      await firestoreService.testDailyLogs(widget.projectId);
+      
       final dailyLogs = await firestoreService.getProjectDailyLogs(widget.projectId);
+      print('📱 DAILY_LOGS: Loaded ${dailyLogs.length} daily logs for project ${widget.projectId}');
       setState(() {
         _dailyLogs = dailyLogs;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      print('❌ DAILY_LOGS: Error loading daily logs: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading daily logs: $e')),
@@ -48,6 +54,7 @@ class _DailyLogsSectionState extends State<DailyLogsSection> {
   }
 
   Future<void> _addDailyLog() async {
+    print('📱 DAILY_LOGS: Opening AddDailyLogScreen for project ${widget.projectId}');
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -55,7 +62,9 @@ class _DailyLogsSectionState extends State<DailyLogsSection> {
       ),
     );
     
+    print('📱 DAILY_LOGS: Received navigation result: $result');
     if (result == true) {
+      print('📱 DAILY_LOGS: Refreshing daily logs list');
       _loadDailyLogs();
     }
   }

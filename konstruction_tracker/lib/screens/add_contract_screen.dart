@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../models/component.dart';
 import '../models/labor.dart';
 import '../models/project.dart';
 import '../services/firestore_service.dart';
@@ -27,21 +28,52 @@ class _AddContractScreenState extends State<AddContractScreen> {
   final _ratePerSqFtController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isLoadingComponents = true;
+  List<Component> _components = [];
+  String? _selectedComponent;
   bool get _isEditing => widget.contract != null;
 
   @override
   void initState() {
     super.initState();
-    if (_isEditing) {
-      _populateFields();
-    }
+    _loadComponents();
   }
 
   void _populateFields() {
     final contract = widget.contract!;
-    _workCategoryController.text = contract.workCategory;
     _totalSqFtController.text = contract.totalSqFt?.toString() ?? '';
     _ratePerSqFtController.text = contract.ratePerSqFt?.toString() ?? '';
+    
+    // Check if work category matches an existing component
+    final matchingComponent = _components.where((c) => c.name == contract.workCategory).firstOrNull;
+    if (matchingComponent != null) {
+      _selectedComponent = contract.workCategory;
+    } else {
+      _selectedComponent = 'custom';
+      _workCategoryController.text = contract.workCategory;
+    }
+  }
+
+  Future<void> _loadComponents() async {
+    try {
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final components = await firestoreService.getProjectComponents(widget.project.id);
+      setState(() {
+        _components = components;
+        _isLoadingComponents = false;
+        
+        if (_isEditing) {
+          _populateFields();
+        }
+      });
+    } catch (e) {
+      setState(() => _isLoadingComponents = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading components: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -54,6 +86,14 @@ class _AddContractScreenState extends State<AddContractScreen> {
 
   Future<void> _saveContract() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate component selection
+    if (_selectedComponent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a component')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -68,7 +108,9 @@ class _AddContractScreenState extends State<AddContractScreen> {
         projectId: widget.project.id,
         type: LaborType.contracted,
         entryType: LaborEntryType.contract,
-        workCategory: _workCategoryController.text.trim(),
+        workCategory: _selectedComponent == 'custom' 
+            ? _workCategoryController.text.trim()
+            : _selectedComponent!,
         totalSqFt: totalSqFt,
         ratePerSqFt: ratePerSqFt,
         createdAt: _isEditing ? widget.contract!.createdAt : DateTime.now(),
@@ -82,6 +124,14 @@ class _AddContractScreenState extends State<AddContractScreen> {
       if (_isEditing) {
         success = await firestoreService.updateLabor(contract);
         print('💾 CONTRACT_SCREEN: Update result: $success');
+        
+        // Sync component after contract update
+        if (success) {
+          await firestoreService.syncLaborProgressToComponent(
+            widget.project.id,
+            contract.workCategory,
+          );
+        }
       } else {
         success = await firestoreService.createLabor(contract);
         print('💾 CONTRACT_SCREEN: Create result: $success');
@@ -182,20 +232,76 @@ class _AddContractScreenState extends State<AddContractScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Work Category - Simple Text Input
-              TextFormField(
-                controller: _workCategoryController,
-                decoration: const InputDecoration(
-                  labelText: 'Work Category',
-                  hintText: 'e.g., Foundation, Sidewalk, Framing',
-                  prefixIcon: Icon(Icons.category),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter work category';
-                  }
-                  return null;
-                },
+              // Work Category - Component Dropdown
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isLoadingComponents) ...[
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Loading components...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ] else ...[
+                    // Component Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).colorScheme.outline),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedComponent,
+                          hint: const Text('Select Component'),
+                          isExpanded: true,
+                          items: [
+                            // Existing components
+                            ..._components.map((component) => DropdownMenuItem<String>(
+                              value: component.name,
+                              child: Text(component.name),
+                            )),
+                            // Custom option
+                            const DropdownMenuItem<String>(
+                              value: 'custom',
+                              child: Text('Custom Component'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedComponent = value;
+                              if (value != 'custom') {
+                                _workCategoryController.clear();
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    // Custom component text field (shown when "Custom Component" is selected)
+                    if (_selectedComponent == 'custom') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _workCategoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Custom Component Name',
+                          hintText: 'Enter custom component name',
+                          prefixIcon: Icon(Icons.edit),
+                        ),
+                        validator: (value) {
+                          if (_selectedComponent == 'custom' && (value == null || value.trim().isEmpty)) {
+                            return 'Please enter custom component name';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ],
+                ],
               ),
               const SizedBox(height: 16),
 

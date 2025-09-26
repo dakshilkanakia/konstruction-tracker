@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/component.dart';
 import '../models/project.dart';
+import '../services/firestore_service.dart';
 import 'quick_edit_component_dialog.dart';
 
 class ComponentsSection extends StatelessWidget {
@@ -25,7 +27,7 @@ class ComponentsSection extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.build,
+              Icons.business,
               size: 64,
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
             ),
@@ -79,10 +81,147 @@ class ComponentsSection extends StatelessWidget {
               onRefresh();
             }
           },
+          onDelete: () async {
+            // Delete component and refresh
+            await _deleteComponent(context, component);
+            onRefresh();
+          },
         );
         },
       ),
     );
+  }
+
+  Future<void> _deleteComponent(BuildContext context, Component component) async {
+    // Get related labor entries to show in summary
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final laborEntries = await firestoreService.getProjectLabor(component.projectId);
+    final relatedLabor = laborEntries.where((l) => l.workCategory == component.name).toList();
+    
+    // Calculate summary
+    final totalLaborCost = relatedLabor.fold(0.0, (sum, labor) => sum + labor.totalCost);
+    final contractEntries = relatedLabor.where((l) => l.isContracted).length;
+    final workEntries = relatedLabor.where((l) => !l.isContracted).length;
+    final progressEntries = relatedLabor.where((l) => l.isProgress).length;
+    final setupEntries = relatedLabor.where((l) => !l.isProgress).length;
+    
+    // Show confirmation dialog with summary
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Component'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete "${component.name}"?'),
+            const SizedBox(height: 16),
+            if (relatedLabor.isNotEmpty) ...[
+              const Text(
+                'This will also delete the following related labor entries:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text('• ${relatedLabor.length} total labor entries'),
+              Text('• $contractEntries contract entries, $workEntries work entries'),
+              Text('• $progressEntries progress entries, $setupEntries setup entries'),
+              Text('• Total value: \$${totalLaborCost.toStringAsFixed(2)}'),
+              const SizedBox(height: 8),
+              const Text(
+                'This action cannot be undone.',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+            ] else ...[
+              const Text(
+                'No related labor entries found.',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'This action cannot be undone.',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      try {
+        final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+        
+        // Delete related labor entries first
+        bool laborDeleteSuccess = true;
+        if (relatedLabor.isNotEmpty) {
+          laborDeleteSuccess = await firestoreService.deleteLaborByWorkCategory(
+            component.projectId, 
+            component.name
+          );
+        }
+        
+        // Delete the component
+        final componentDeleteSuccess = await firestoreService.deleteComponent(component.id);
+        
+        // Close loading dialog
+        Navigator.of(context).pop();
+        
+        if (componentDeleteSuccess && laborDeleteSuccess) {
+          final message = relatedLabor.isNotEmpty 
+              ? 'Component "${component.name}" and ${relatedLabor.length} related labor entries deleted successfully'
+              : 'Component "${component.name}" deleted successfully';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          String errorMessage = 'Failed to delete component.';
+          if (!laborDeleteSuccess) {
+            errorMessage += ' Some labor entries may not have been deleted.';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        // Close loading dialog
+        Navigator.of(context).pop();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting component: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -90,12 +229,14 @@ class ComponentCard extends StatelessWidget {
   final Component component;
   final Project project;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   const ComponentCard({
     super.key,
     required this.component,
     required this.project,
     required this.onTap,
+    required this.onDelete,
   });
 
   @override
@@ -156,6 +297,22 @@ class ComponentCard extends StatelessWidget {
                           color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: onDelete,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.delete,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -170,6 +327,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Total Area',
                       '${component.totalArea.toStringAsFixed(1)} sq ft',
+                      Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   Expanded(
@@ -177,6 +335,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Completed',
                       '${component.completedArea.toStringAsFixed(1)} sq ft',
+                      Colors.orange,
                     ),
                   ),
                   Expanded(
@@ -184,6 +343,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Remaining',
                       '${component.remainingArea.toStringAsFixed(1)} sq ft',
+                      Colors.green,
                     ),
                   ),
                 ],
@@ -198,6 +358,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Budget',
                       '\$${component.componentBudget.toStringAsFixed(0)}',
+                      Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   Expanded(
@@ -205,6 +366,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Used',
                       '\$${component.amountUsed.toStringAsFixed(0)}',
+                      Colors.orange,
                     ),
                   ),
                   Expanded(
@@ -212,6 +374,7 @@ class ComponentCard extends StatelessWidget {
                       context,
                       'Remaining',
                       '\$${component.remainingBudget.toStringAsFixed(0)}',
+                      Colors.green,
                     ),
                   ),
                 ],
@@ -227,6 +390,7 @@ class ComponentCard extends StatelessWidget {
                         context,
                         'Total Concrete',
                         '${component.totalConcrete.toStringAsFixed(1)} cu yd',
+                        Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     Expanded(
@@ -234,6 +398,7 @@ class ComponentCard extends StatelessWidget {
                         context,
                         'Poured',
                         '${component.concretePoured.toStringAsFixed(1)} cu yd',
+                        Colors.orange,
                       ),
                     ),
                     Expanded(
@@ -241,6 +406,7 @@ class ComponentCard extends StatelessWidget {
                         context,
                         'Remaining',
                         '${component.remainingConcrete.toStringAsFixed(1)} cu yd',
+                        Colors.green,
                       ),
                     ),
                   ],
@@ -356,7 +522,7 @@ class ComponentCard extends StatelessWidget {
                           '${(component.concreteProgressPercentage * 100).toStringAsFixed(1)}%',
                           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             color: component.concretePoured > component.totalConcrete 
-                                ? Colors.red 
+                                ? Colors.orange 
                                 : _getConcreteColor(component.concreteProgressPercentage),
                             fontWeight: FontWeight.bold,
                           ),
@@ -365,10 +531,10 @@ class ComponentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(
-                      value: component.concreteProgressPercentage.clamp(0.0, 1.0),
+                      value: component.concreteProgressPercentage.clamp(0.0, 1.0), // Still clamp for progress bar
                       backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
                       color: component.concretePoured > component.totalConcrete 
-                          ? Colors.red 
+                          ? Colors.orange // Changed from red to orange for warning
                           : _getConcreteColor(component.concreteProgressPercentage),
                     ),
                     if (component.concretePoured > component.totalConcrete || component.isConcreteWarning) ...[
@@ -376,8 +542,8 @@ class ComponentCard extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            component.concretePoured > component.totalConcrete ? Icons.error : Icons.warning,
-                            color: component.concretePoured > component.totalConcrete ? Colors.red : Colors.orange,
+                            component.concretePoured > component.totalConcrete ? Icons.warning : Icons.warning,
+                            color: component.concretePoured > component.totalConcrete ? Colors.orange : Colors.orange,
                             size: 16,
                           ),
                           const SizedBox(width: 4),
@@ -387,7 +553,7 @@ class ComponentCard extends StatelessWidget {
                                   ? 'Concrete exceeded by ${(component.concretePoured - component.totalConcrete).toStringAsFixed(1)} cu yd'
                                   : 'Concrete warning - ${component.remainingConcrete.toStringAsFixed(1)} cu yd remaining',
                               style: TextStyle(
-                                color: component.concretePoured > component.totalConcrete ? Colors.red : Colors.orange,
+                                color: component.concretePoured > component.totalConcrete ? Colors.orange : Colors.orange,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -406,7 +572,7 @@ class ComponentCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoItem(BuildContext context, String label, String value) {
+  Widget _buildInfoItem(BuildContext context, String label, String value, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -421,6 +587,7 @@ class ComponentCard extends StatelessWidget {
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
+            color: color,
           ),
         ),
       ],
@@ -428,8 +595,8 @@ class ComponentCard extends StatelessWidget {
   }
 
   Color _getStatusColor(double progress) {
-    if (progress >= 1.0) return const Color(0xFFFFD700); // Gold
-    if (progress >= 0.7) return const Color(0xFFB8860B); // Dark gold
+    if (progress >= 1.0) return Colors.green; // Green for completed
+    if (progress >= 0.7) return const Color(0xFF1976D2); // Primary blue
     if (progress >= 0.3) return Colors.orange;
     return Colors.red;
   }
@@ -437,14 +604,14 @@ class ComponentCard extends StatelessWidget {
   Color _getBudgetColor(double progress) {
     if (progress > 0.9) return Colors.red;
     if (progress > 0.8) return Colors.orange;
-    if (progress > 0.7) return const Color(0xFFB8860B); // Dark gold
-    return const Color(0xFFFFD700); // Gold
+    if (progress > 0.7) return const Color(0xFF4CAF50); // Green for budget
+    return const Color(0xFF8BC34A); // Light green for good budget progress
   }
 
   Color _getConcreteColor(double progress) {
-    if (progress >= 1.0) return Colors.green;
+    if (progress >= 1.0) return const Color(0xFF4CAF50); // Green for completed
     if (progress > 0.8) return Colors.orange;
-    if (progress > 0.5) return const Color(0xFFB8860B); // Dark gold
-    return const Color(0xFFFFD700); // Gold
+    if (progress > 0.5) return const Color(0xFFFF9800); // Orange for concrete
+    return const Color(0xFFFFC107); // Amber for good concrete progress
   }
 }

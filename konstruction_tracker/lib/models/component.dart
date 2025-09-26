@@ -10,6 +10,8 @@ class Component {
   final double amountUsed; // amount actually spent on this component
   final double totalConcrete; // total concrete needed in cubic yards
   final double concretePoured; // concrete already poured in cubic yards
+  final double originalCompletedArea; // original manual completed area (before labor sync)
+  final double originalAmountUsed; // original manual amount used (before labor sync)
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,6 +25,8 @@ class Component {
     required this.amountUsed,
     required this.totalConcrete,
     required this.concretePoured,
+    required this.originalCompletedArea,
+    required this.originalAmountUsed,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -38,7 +42,7 @@ class Component {
   bool get isBudgetExceeded => amountUsed > componentBudget;
   bool get isBudgetWarning => budgetProgressPercentage > 0.8;
 
-  // Concrete Progress
+  // Concrete Progress (allows values above 100% for overpour)
   double get concreteProgressPercentage => totalConcrete > 0 ? (concretePoured / totalConcrete) : 0.0;
   double get remainingConcrete => totalConcrete - concretePoured;
   bool get isConcreteCompleted => concretePoured >= totalConcrete;
@@ -61,6 +65,8 @@ class Component {
       'amountUsed': amountUsed,
       'totalConcrete': totalConcrete,
       'concretePoured': concretePoured,
+      'originalCompletedArea': originalCompletedArea,
+      'originalAmountUsed': originalAmountUsed,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -77,6 +83,8 @@ class Component {
       amountUsed: (map['amountUsed'] ?? 0.0).toDouble(),
       totalConcrete: (map['totalConcrete'] ?? 0.0).toDouble(),
       concretePoured: (map['concretePoured'] ?? 0.0).toDouble(),
+      originalCompletedArea: (map['originalCompletedArea'] ?? 0.0).toDouble(),
+      originalAmountUsed: (map['originalAmountUsed'] ?? 0.0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
     );
@@ -92,6 +100,8 @@ class Component {
     double? amountUsed,
     double? totalConcrete,
     double? concretePoured,
+    double? originalCompletedArea,
+    double? originalAmountUsed,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -105,6 +115,8 @@ class Component {
       amountUsed: amountUsed ?? this.amountUsed,
       totalConcrete: totalConcrete ?? this.totalConcrete,
       concretePoured: concretePoured ?? this.concretePoured,
+      originalCompletedArea: originalCompletedArea ?? this.originalCompletedArea,
+      originalAmountUsed: originalAmountUsed ?? this.originalAmountUsed,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

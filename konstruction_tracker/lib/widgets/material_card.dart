@@ -66,6 +66,7 @@ class MaterialCard extends StatelessWidget {
                         'Quantity',
                         '${quantityOrdered.toStringAsFixed(1)} ${material.unit ?? 'units'}',
                         Icons.shopping_cart,
+                        Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   if (costPerUnit > 0)
@@ -75,6 +76,7 @@ class MaterialCard extends StatelessWidget {
                         'Cost/Unit',
                         '\$${costPerUnit.toStringAsFixed(2)}',
                         Icons.attach_money,
+                        Colors.orange,
                       ),
                     ),
                   Expanded(
@@ -83,6 +85,7 @@ class MaterialCard extends StatelessWidget {
                       'Total Cost',
                       '\$${material.totalCost.toStringAsFixed(2)}',
                       Icons.calculate,
+                      Colors.green,
                     ),
                   ),
                 ],
@@ -127,6 +130,7 @@ class MaterialCard extends StatelessWidget {
     String label,
     String value,
     IconData icon,
+    Color color,
   ) {
 
     return Column(
@@ -137,7 +141,7 @@ class MaterialCard extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              color: color,
             ),
             const SizedBox(width: 4),
             Text(
@@ -153,6 +157,7 @@ class MaterialCard extends StatelessWidget {
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w500,
+            color: color,
           ),
         ),
       ],

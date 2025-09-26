@@ -155,6 +155,21 @@ class _LaborSectionState extends State<LaborSection> {
       try {
         final firestoreService = Provider.of<FirestoreService>(context, listen: false);
         await firestoreService.deleteLabor(labor.id);
+        
+        // Sync component after labor deletion
+        await firestoreService.syncLaborProgressToComponent(
+          widget.project.id,
+          labor.workCategory,
+        );
+        
+        // If this is a work progress entry, sync work setup remaining values
+        if (labor.isWorkProgress && labor.workSetupId != null) {
+          await firestoreService.syncWorkSetupRemainingValues(
+            widget.project.id,
+            labor.workSetupId!,
+          );
+        }
+        
         _loadLabor();
         widget.onRefresh(); // Notify parent to refresh
         if (mounted) {
@@ -342,7 +357,7 @@ class _LaborSectionState extends State<LaborSection> {
     final completedSqFt = Labor.calculateTotalCompleted(progressEntries);
     final progressPercentage = Labor.calculateProgressPercentage(totalSqFt, completedSqFt);
     final remainingSqFt = totalSqFt - completedSqFt;
-    final totalBudget = contract.totalCost;
+    final totalBudget = contract.totalValue;
     final completedBudget = progressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
     final remainingBudget = Labor.calculateRemainingBudget(totalBudget, completedBudget);
 
@@ -454,7 +469,7 @@ class _LaborSectionState extends State<LaborSection> {
                   valueColor: AlwaysStoppedAnimation<Color>(
                     progressPercentage >= 100
                         ? Colors.green
-                        : Theme.of(context).colorScheme.primary,
+                        : const Color(0xFF9C27B0), // Purple for contract progress
                   ),
                 ),
               ],
@@ -469,6 +484,7 @@ class _LaborSectionState extends State<LaborSection> {
                     'Completed Budget',
                     '\$${completedBudget.toStringAsFixed(2)}',
                     Icons.monetization_on,
+                    Colors.orange,
                   ),
                 ),
                 Expanded(
@@ -476,6 +492,7 @@ class _LaborSectionState extends State<LaborSection> {
                     'Remaining Budget',
                     '\$${remainingBudget.toStringAsFixed(2)}',
                     Icons.account_balance_wallet,
+                    Colors.green,
                   ),
                 ),
                 Expanded(
@@ -483,6 +500,7 @@ class _LaborSectionState extends State<LaborSection> {
                     'Remaining Work',
                     '${remainingSqFt.toStringAsFixed(0)} sq ft',
                     Icons.straighten,
+                    Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
@@ -518,13 +536,29 @@ class _LaborSectionState extends State<LaborSection> {
         .where((l) => l.workSetupId == workSetup.id && l.isWorkProgress)
         .toList();
     
-    final totalBudget = workSetup.totalBudget ?? 0.0;
-    final maxHours = workSetup.maxHours;
+    // Detect work setup type (existing component vs custom component)
+    final isExistingComponentWorkSetup = workSetup.remainingArea != null && workSetup.remainingBudget != null;
+    
+    // Calculate values based on work setup type
+    final maxHours = isExistingComponentWorkSetup 
+        ? null 
+        : workSetup.maxHours;
     final workedHours = Labor.calculateTotalHoursWorked(workProgressEntries);
-    final progressPercentage = Labor.calculateWorkProgressPercentage(maxHours, workedHours);
-    final remainingHours = maxHours - workedHours;
+    final progressPercentage = isExistingComponentWorkSetup 
+        ? 0.0 // For existing components, we'll calculate based on area progress
+        : Labor.calculateWorkProgressPercentage(maxHours ?? 0.0, workedHours);
+    final remainingHours = isExistingComponentWorkSetup 
+        ? null 
+        : ((maxHours ?? 0.0) - workedHours);
+    
+    // Calculate used budget from progress entries
     final usedBudget = workProgressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
-    final remainingBudget = totalBudget - usedBudget;
+    
+    // For existing component work setups, use the stored remaining values directly
+    // For custom component work setups, calculate remaining budget
+    final remainingBudget = isExistingComponentWorkSetup 
+        ? (workSetup.remainingBudget ?? 0.0)
+        : ((workSetup.totalBudget ?? 0.0) - usedBudget);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -547,7 +581,9 @@ class _LaborSectionState extends State<LaborSection> {
                         ),
                       ),
                       Text(
-                        '\$${workSetup.fixedHourlyRate?.toStringAsFixed(2) ?? '0.00'} / hour • ${maxHours.toStringAsFixed(0)} max hours',
+                        isExistingComponentWorkSetup 
+                            ? 'Remaining Area: ${workSetup.remainingArea?.toStringAsFixed(1) ?? '0.0'} sq ft • Remaining Budget: \$${workSetup.remainingBudget?.toStringAsFixed(2) ?? '0.00'}'
+                            : '\$${workSetup.fixedHourlyRate?.toStringAsFixed(2) ?? '0.00'} / hour • ${maxHours?.toStringAsFixed(0) ?? '0'} max hours',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                         ),
@@ -614,13 +650,17 @@ class _LaborSectionState extends State<LaborSection> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Progress: ${progressPercentage.toStringAsFixed(1)}%',
+                      isExistingComponentWorkSetup 
+                          ? 'Work Setup Active'
+                          : 'Progress: ${progressPercentage.toStringAsFixed(1)}%',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     Text(
-                      '${workedHours.toStringAsFixed(1)} / ${maxHours.toStringAsFixed(1)} hours',
+                      isExistingComponentWorkSetup 
+                          ? '${workProgressEntries.length} progress entries'
+                          : '${workedHours.toStringAsFixed(1)} / ${maxHours?.toStringAsFixed(1) ?? '0'} hours',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
@@ -628,15 +668,32 @@ class _LaborSectionState extends State<LaborSection> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                LinearProgressIndicator(
-                  value: progressPercentage / 100,
-                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    progressPercentage >= 100
-                        ? Colors.green
-                        : const Color(0xFFFFD700), // Gold color for work setups
+                if (!isExistingComponentWorkSetup) ...[
+                  LinearProgressIndicator(
+                    value: progressPercentage / 100,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      progressPercentage >= 100
+                          ? Colors.green
+                          : const Color(0xFF3F51B5), // Indigo for work setup progress
+                    ),
                   ),
-                ),
+                ] else ...[
+                  Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3F51B5), // Indigo for work setup progress
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -649,6 +706,7 @@ class _LaborSectionState extends State<LaborSection> {
                     'Used Budget',
                     '\$${usedBudget.toStringAsFixed(2)}',
                     Icons.monetization_on,
+                    Colors.orange,
                   ),
                 ),
                 Expanded(
@@ -656,13 +714,21 @@ class _LaborSectionState extends State<LaborSection> {
                     'Remaining Budget',
                     '\$${remainingBudget.toStringAsFixed(2)}',
                     Icons.account_balance_wallet,
+                    Colors.green,
                   ),
                 ),
                 Expanded(
                   child: _buildInfoItem(
-                    'Remaining Hours',
-                    '${remainingHours.toStringAsFixed(1)} hrs',
-                    Icons.schedule,
+                    isExistingComponentWorkSetup 
+                        ? 'Remaining Area'
+                        : 'Remaining Hours',
+                    isExistingComponentWorkSetup 
+                        ? '${workSetup.remainingArea?.toStringAsFixed(1) ?? '0.0'} sq ft'
+                        : '${remainingHours?.toStringAsFixed(1) ?? '0.0'} hrs',
+                    isExistingComponentWorkSetup 
+                        ? Icons.square_foot
+                        : Icons.schedule,
+                    Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
@@ -678,8 +744,8 @@ class _LaborSectionState extends State<LaborSection> {
                     icon: const Icon(Icons.add),
                     label: const Text('Add Progress'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFD700),
-                      foregroundColor: Colors.black,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                   ),
                 ),
@@ -696,19 +762,20 @@ class _LaborSectionState extends State<LaborSection> {
     );
   }
 
-  Widget _buildInfoItem(String label, String value, IconData icon) {
+  Widget _buildInfoItem(String label, String value, IconData icon, Color color) {
     return Column(
       children: [
         Icon(
           icon,
           size: 20,
-          color: Theme.of(context).colorScheme.primary,
+          color: color,
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: color,
           ),
         ),
         Text(
@@ -738,7 +805,7 @@ class _LaborSectionState extends State<LaborSection> {
                     final progress = workProgressEntries[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: const Color(0xFFFFD700),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         child: Text(
                           '${progress.hoursWorked?.toStringAsFixed(0) ?? '0'}h',
                           style: const TextStyle(
@@ -912,16 +979,16 @@ class _LaborSectionState extends State<LaborSection> {
   }
 
   double _getTotalCost() {
-    return _labor.fold(0.0, (sum, labor) => sum + labor.totalCost);
+    return _labor.fold(0.0, (sum, labor) => sum + labor.totalValue);
   }
 
   double _getContractedCost() {
     return _labor
         .where((l) => l.type == LaborType.contracted)
-        .fold(0.0, (sum, labor) => sum + labor.totalCost);
+        .fold(0.0, (sum, labor) => sum + labor.totalValue);
   }
 
   double _getWorkSetupCost() {
-    return _workSetups.fold(0.0, (sum, workSetup) => sum + workSetup.totalCost);
+    return _workSetups.fold(0.0, (sum, workSetup) => sum + workSetup.totalValue);
   }
 }

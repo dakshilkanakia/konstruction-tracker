@@ -67,27 +67,20 @@ class _AuthScreenState extends State<AuthScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Logo/Title
-                Icon(
-                  Icons.construction,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Konstruction Tracker',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                Image.asset(
+                  'logo.png',
+                  height: 280,
+                  width: 280,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Manage your construction projects',
+                  'Build with Confidence \n Your Project, Tracked',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 30),
 
                 // Auth Form
                 Card(

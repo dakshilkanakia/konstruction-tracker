@@ -65,6 +65,7 @@ class MachineryCard extends StatelessWidget {
                       'Type',
                       machinery.typeString,
                       machinery.type == models.MachineryType.rental ? Icons.schedule : Icons.business,
+                      machinery.type == models.MachineryType.rental ? Colors.orange : Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   Expanded(
@@ -73,6 +74,7 @@ class MachineryCard extends StatelessWidget {
                       'Hours Used',
                       '${hoursUsed.toStringAsFixed(1)} hrs',
                       Icons.schedule,
+                      Colors.orange,
                     ),
                   ),
                   Expanded(
@@ -81,6 +83,7 @@ class MachineryCard extends StatelessWidget {
                       'Total Cost',
                       '\$${machinery.totalCost.toStringAsFixed(2)}',
                       Icons.attach_money,
+                      Colors.green,
                     ),
                   ),
                 ],
@@ -165,12 +168,12 @@ class MachineryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: machinery.type == models.MachineryType.rental 
                           ? Colors.orange.withOpacity(0.1)
-                          : const Color(0xFFFFD700).withOpacity(0.1),
+                          : Theme.of(context).colorScheme.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: machinery.type == models.MachineryType.rental 
                             ? Colors.orange.withOpacity(0.3)
-                            : const Color(0xFFFFD700).withOpacity(0.3),
+                            : Theme.of(context).colorScheme.primary.withOpacity(0.3),
                       ),
                     ),
                     child: Row(
@@ -179,7 +182,7 @@ class MachineryCard extends StatelessWidget {
                         Icon(
                           machinery.type == models.MachineryType.rental ? Icons.schedule : Icons.business,
                           size: 12,
-                          color: machinery.type == models.MachineryType.rental ? Colors.orange : const Color(0xFFFFD700),
+                          color: machinery.type == models.MachineryType.rental ? Colors.orange : Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -187,7 +190,7 @@ class MachineryCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color: machinery.type == models.MachineryType.rental ? Colors.orange : const Color(0xFFFFD700),
+                            color: machinery.type == models.MachineryType.rental ? Colors.orange : Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ],
@@ -207,6 +210,7 @@ class MachineryCard extends StatelessWidget {
     String label,
     String value,
     IconData icon,
+    Color color,
   ) {
 
     return Column(
@@ -217,7 +221,7 @@ class MachineryCard extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              color: color,
             ),
             const SizedBox(width: 4),
             Text(
@@ -233,6 +237,7 @@ class MachineryCard extends StatelessWidget {
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w500,
+            color: color,
           ),
         ),
       ],

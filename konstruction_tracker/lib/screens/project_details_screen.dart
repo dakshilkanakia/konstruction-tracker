@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 // import 'package:intl/intl.dart'; // Will be used for currency formatting
 import '../models/project.dart';
 import '../models/component.dart';
+import '../models/labor.dart';
 import '../models/material.dart' as models;
 import '../models/machinery.dart';
 import '../services/firestore_service.dart';
@@ -12,6 +14,7 @@ import '../widgets/materials_section.dart';
 import '../widgets/machinery_section.dart';
 import '../widgets/labor_section.dart';
 import '../widgets/daily_logs_section.dart';
+import '../widgets/quick_notes_section.dart';
 import 'add_component_screen.dart';
 import 'add_contract_screen.dart';
 import 'add_material_screen.dart';
@@ -36,6 +39,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   List<Component> _components = [];
   List<models.Material> _materials = [];
   List<Machinery> _machinery = [];
+  List<Labor> _labor = [];
   bool _isLoading = true;
   int _currentTabIndex = 0;
   int _laborRefreshKey = 0; // For forcing labor section refresh
@@ -62,6 +66,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     super.dispose();
   }
 
+  Project? _currentProject;
+
   Future<void> _loadProjectData() async {
     setState(() => _isLoading = true);
 
@@ -70,19 +76,25 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     print('ProjectDetails: Loading data for project ${widget.project.id}');
     
     final results = await Future.wait([
+      firestoreService.getProject(widget.project.id), // Reload project data
       firestoreService.getProjectComponents(widget.project.id),
       firestoreService.getProjectMaterials(widget.project.id),
       firestoreService.getProjectMachinery(widget.project.id),
+      firestoreService.getProjectLabor(widget.project.id),
     ]);
 
-    print('ProjectDetails: Components loaded: ${(results[0] as List<Component>).length}');
-    print('ProjectDetails: Materials loaded: ${(results[1] as List<models.Material>).length}');
-    print('ProjectDetails: Machinery loaded: ${(results[2] as List<Machinery>).length}');
+    print('ProjectDetails: Project loaded: ${results[0] != null}');
+    print('ProjectDetails: Components loaded: ${(results[1] as List<Component>).length}');
+    print('ProjectDetails: Materials loaded: ${(results[2] as List<models.Material>).length}');
+    print('ProjectDetails: Machinery loaded: ${(results[3] as List<Machinery>).length}');
+    print('ProjectDetails: Labor loaded: ${(results[4] as List<Labor>).length}');
 
     setState(() {
-      _components = results[0] as List<Component>;
-      _materials = results[1] as List<models.Material>;
-      _machinery = results[2] as List<Machinery>;
+      _currentProject = results[0] as Project?;
+      _components = results[1] as List<Component>;
+      _materials = results[2] as List<models.Material>;
+      _machinery = results[3] as List<Machinery>;
+      _labor = results[4] as List<Labor>;
       _isLoading = false;
     });
     
@@ -91,20 +103,62 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   double get _totalUsedBudget {
     double total = 0.0;
+    double componentTotal = 0.0;
+    double materialTotal = 0.0;
+    double machineryTotal = 0.0;
+    double laborTotal = 0.0;
     
     // Add component costs
     for (var component in _components) {
-      total += component.totalCost;
+      componentTotal += component.totalCost;
+      if (kDebugMode) print('  Component: ${component.name} - Cost: \$${component.totalCost.toStringAsFixed(2)}');
     }
     
     // Add material costs
     for (var material in _materials) {
-      total += material.totalCost;
+      materialTotal += material.totalCost;
+      if (kDebugMode) print('  Material: ${material.name} - Cost: \$${material.totalCost.toStringAsFixed(2)}');
     }
     
     // Add machinery costs
     for (var machine in _machinery) {
-      total += machine.totalCost;
+      machineryTotal += machine.totalCost;
+      if (kDebugMode) print('  Machine: ${machine.name} - Cost: \$${machine.totalCost.toStringAsFixed(2)}');
+    }
+    
+    // Add labor costs (only for custom components, not existing ones)
+    // Note: Labor costs for existing components are already included in component.amountUsed
+    // through the sync process, so we only count custom labor to avoid double counting
+    for (var labor in _labor) {
+      // Check if this labor workCategory matches any existing component
+      final hasMatchingComponent = _components.any((component) => component.name == labor.workCategory);
+      
+      // Only include labor cost if it's a custom component (no matching component exists)
+      if (!hasMatchingComponent) {
+        laborTotal += labor.totalCost; // Use totalCost to show actual work done
+        if (kDebugMode) print('  Custom Labor: ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)}');
+      } else {
+        if (kDebugMode) print('  Labor (existing component): ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)} (excluded from total)');
+      }
+    }
+    
+    total = componentTotal + materialTotal + machineryTotal + laborTotal;
+    
+    // Debug logging
+    print('💰 BUDGET CALCULATION:');
+    print('  Components: \$${componentTotal.toStringAsFixed(2)}');
+    print('  Materials: \$${materialTotal.toStringAsFixed(2)}');
+    print('  Machinery: \$${machineryTotal.toStringAsFixed(2)}');
+    print('  Labor (custom): \$${laborTotal.toStringAsFixed(2)}');
+    print('  Total Used: \$${total.toStringAsFixed(2)}');
+    print('  Project Budget: \$${widget.project.totalBudget.toStringAsFixed(2)}');
+    print('  Remaining: \$${(widget.project.totalBudget - total).toStringAsFixed(2)}');
+    
+    // Debug individual labor entries
+    print('🔍 LABOR ENTRIES:');
+    for (var labor in _labor) {
+      final hasMatchingComponent = _components.any((component) => component.name == labor.workCategory);
+      print('  ${labor.workCategory}: totalCost=\$${labor.totalCost.toStringAsFixed(2)}, totalValue=\$${labor.totalValue.toStringAsFixed(2)}, hasComponent=$hasMatchingComponent');
     }
     
     return total;
@@ -130,10 +184,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           controller: _tabController,
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'Overview'),
-            Tab(icon: Icon(Icons.build), text: 'Components'),
-            Tab(icon: Icon(Icons.inventory), text: 'Materials'),
-            Tab(icon: Icon(Icons.construction), text: 'Machinery'),
+            Tab(icon: Icon(Icons.business), text: 'Components'),
             Tab(icon: Icon(Icons.work), text: 'Labor'),
+            Tab(icon: Icon(Icons.inventory), text: 'Materials'),
+            Tab(icon: Icon(Icons.local_shipping), text: 'Machinery'),
             Tab(icon: Icon(Icons.assignment), text: 'Logs'),
           ],
         ),
@@ -145,9 +199,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
               children: [
                 _buildOverviewTab(),
                 _buildComponentsTab(),
+                _buildLaborTab(),
                 _buildMaterialsTab(),
                 _buildMachineryTab(),
-                _buildLaborTab(),
                 _buildDailyLogsTab(),
               ],
             ),
@@ -183,6 +237,13 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+
+          // Quick Notes Section
+          QuickNotesSection(
+            project: _currentProject ?? widget.project,
+            onRefresh: _loadProjectData,
           ),
           const SizedBox(height: 16),
 
@@ -232,7 +293,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 child: _buildStatCard(
                   'Components',
                   '${_components.length}',
-                  Icons.build,
+                  Icons.business,
                   Colors.blue,
                 ),
               ),
@@ -250,7 +311,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 child: _buildStatCard(
                   'Machinery',
                   '${_machinery.length}',
-                  Icons.construction,
+                  Icons.local_shipping,
                   Colors.orange,
                 ),
               ),
@@ -273,13 +334,16 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   Widget _buildMaterialsTab() {
     return MaterialsSection(
       key: ValueKey('materials_${_materials.length}'), // Force rebuild when materials count changes
-      project: widget.project,
+      project: _currentProject ?? widget.project,
       onRefresh: _loadProjectData,
     );
   }
 
   Widget _buildMachineryTab() {
-    return MachinerySection(projectId: widget.project.id);
+    return MachinerySection(
+      project: _currentProject ?? widget.project,
+      onRefresh: _loadProjectData,
+    );
   }
 
   Widget _buildLaborTab() {
@@ -363,22 +427,22 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           tooltip: 'Add Component',
           child: const Icon(Icons.add),
         );
-      case 2: // Materials tab
+      case 2: // Labor tab
+        return FloatingActionButton(
+          onPressed: _navigateToAddLabor,
+          tooltip: 'Add Labor Entry',
+          child: const Icon(Icons.add),
+        );
+      case 3: // Materials tab
         return FloatingActionButton(
           onPressed: _navigateToAddMaterial,
           tooltip: 'Add Material',
           child: const Icon(Icons.add),
         );
-      case 3: // Machinery tab
+      case 4: // Machinery tab
         return FloatingActionButton(
           onPressed: _navigateToAddMachinery,
           tooltip: 'Add Machinery',
-          child: const Icon(Icons.add),
-        );
-      case 4: // Labor tab
-        return FloatingActionButton(
-          onPressed: _navigateToAddLabor,
-          tooltip: 'Add Labor Entry',
           child: const Icon(Icons.add),
         );
       case 5: // Daily Logs tab

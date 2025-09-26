@@ -84,7 +84,7 @@ class DailyLogCard extends StatelessWidget {
                   'Work Completed',
                   dailyLog.workCompleted!,
                   Icons.construction,
-                  const Color(0xFFFFD700),
+                  Theme.of(context).colorScheme.primary,
                 ),
 
               // Materials used

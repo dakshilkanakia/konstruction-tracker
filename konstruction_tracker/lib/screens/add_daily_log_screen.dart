@@ -87,34 +87,32 @@ class _AddDailyLogScreenState extends State<AddDailyLogScreen> {
         updatedAt: DateTime.now(),
       );
 
+      bool success = false;
       if (_isEditing) {
-        await firestoreService.updateDailyLog(dailyLog);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Daily log updated successfully')),
-          );
-        }
+        success = await firestoreService.updateDailyLog(dailyLog);
       } else {
-        await firestoreService.createDailyLog(dailyLog);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Daily log added successfully')),
-          );
-        }
+        success = await firestoreService.createDailyLog(dailyLog);
       }
 
       if (mounted) {
-        Navigator.pop(context, true);
+        setState(() => _isLoading = false);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_isEditing ? 'Daily log updated successfully' : 'Daily log added successfully')),
+          );
+          Navigator.pop(context, true); // Return true to indicate success
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to save daily log')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving daily log: $e')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../models/material.dart' as models;
 import '../models/project.dart';
 import '../services/firestore_service.dart';
 import '../screens/add_material_screen.dart';
 import 'material_card.dart';
+import 'materials_budget_card.dart';
 
 class MaterialsSection extends StatefulWidget {
   final Project project;
@@ -129,43 +131,71 @@ class _MaterialsSectionState extends State<MaterialsSection> {
     }
 
     if (_materials.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Materials Added',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+      return Column(
+        children: [
+          // Materials Budget Card (even when no materials)
+          MaterialsBudgetCard(
+            project: widget.project,
+            materials: _materials,
+            onRefresh: widget.onRefresh,
+          ),
+          const SizedBox(height: 16),
+          
+          // Empty state
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Materials Added',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add materials to track inventory and costs',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _addMaterial,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add First Material'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Add materials to track inventory and costs',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _addMaterial,
-              icon: const Icon(Icons.add),
-              label: const Text('Add First Material'),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
+    if (kDebugMode) {
+      print('📦 MaterialsSection: Building with project materialsBudget = ${widget.project.materialsBudget}');
+      print('📦 MaterialsSection: Materials count = ${_materials.length}');
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Materials Budget Card
+        MaterialsBudgetCard(
+          project: widget.project,
+          materials: _materials,
+          onRefresh: widget.onRefresh,
+        ),
+        const SizedBox(height: 16),
+        
         // Header with stats
         Container(
           padding: const EdgeInsets.all(16),

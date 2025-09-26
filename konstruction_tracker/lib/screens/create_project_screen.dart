@@ -6,7 +6,9 @@ import '../services/firestore_service.dart';
 import '../models/project.dart';
 
 class CreateProjectScreen extends StatefulWidget {
-  const CreateProjectScreen({super.key});
+  final Project? project; // For editing existing project
+
+  const CreateProjectScreen({super.key, this.project});
 
   @override
   State<CreateProjectScreen> createState() => _CreateProjectScreenState();
@@ -20,6 +22,24 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   final _budgetController = TextEditingController();
   DateTime _startDate = DateTime.now();
   bool _isLoading = false;
+  bool get _isEditing => widget.project != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      _populateFields();
+    }
+  }
+
+  void _populateFields() {
+    final project = widget.project!;
+    _nameController.text = project.name;
+    _locationController.text = project.location;
+    _contractorController.text = project.generalContractor;
+    _budgetController.text = project.totalBudget.toString();
+    _startDate = project.startDate;
+  }
 
   @override
   void dispose() {
@@ -42,49 +62,51 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     }
   }
 
-  Future<void> _createProject() async {
+  Future<void> _saveProject() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
       final project = Project(
-        id: const Uuid().v4(),
+        id: _isEditing ? widget.project!.id : const Uuid().v4(),
         name: _nameController.text.trim(),
         location: _locationController.text.trim(),
         generalContractor: _contractorController.text.trim(),
         totalBudget: double.parse(_budgetController.text),
         startDate: _startDate,
-        createdAt: DateTime.now(),
+        createdAt: _isEditing ? widget.project!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      print('Creating project with data: ${project.toMap()}'); // Debug log
+      print('${_isEditing ? 'Updating' : 'Creating'} project with data: ${project.toMap()}'); // Debug log
 
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-      final success = await firestoreService.createProject(project);
+      final success = _isEditing 
+          ? await firestoreService.updateProject(project)
+          : await firestoreService.createProject(project);
 
       setState(() => _isLoading = false);
 
       if (success && mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Return true to indicate success
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Project created successfully'),
+          SnackBar(
+            content: Text(_isEditing ? 'Project updated successfully' : 'Project created successfully'),
             backgroundColor: Colors.green,
           ),
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to create project. Check console for details.'),
+          SnackBar(
+            content: Text(_isEditing ? 'Failed to update project. Check console for details.' : 'Failed to create project. Check console for details.'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      print('Error in _createProject: $e'); // Debug log
+      print('Error in _saveProject: $e'); // Debug log
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -101,7 +123,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create New Project'),
+        title: Text(_isEditing ? 'Edit Project' : 'Create New Project'),
+        backgroundColor: _isEditing 
+            ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+            : null,
+        foregroundColor: _isEditing 
+            ? Theme.of(context).colorScheme.primary
+            : null,
       ),
       body: Form(
         key: _formKey,
@@ -204,9 +232,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Create Button
+            // Save Button
             ElevatedButton(
-              onPressed: _isLoading ? null : _createProject,
+              onPressed: _isLoading ? null : _saveProject,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -216,7 +244,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Create Project'),
+                  : Text(_isEditing ? 'Update Project' : 'Create Project'),
             ),
             const SizedBox(height: 16),
 

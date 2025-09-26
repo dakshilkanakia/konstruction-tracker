@@ -28,10 +28,14 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
   final _hoursWorkedController = TextEditingController();
   final _numberOfWorkersController = TextEditingController();
   final _companyController = TextEditingController();
+  final _completedAreaController = TextEditingController();
+  final _totalHoursController = TextEditingController();
+  final _fixedHourlyRateController = TextEditingController();
 
   bool _isLoading = false;
   DateTime _workDate = DateTime.now();
   bool get _isEditing => widget.workProgress != null;
+  bool get _isExistingComponentWorkSetup => widget.workSetup.remainingArea != null && widget.workSetup.remainingBudget != null;
 
   @override
   void initState() {
@@ -46,6 +50,9 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
     _hoursWorkedController.text = workProgress.hoursWorked?.toString() ?? '';
     _numberOfWorkersController.text = workProgress.numberOfWorkers?.toString() ?? '';
     _companyController.text = workProgress.subcontractorCompany ?? '';
+    _completedAreaController.text = workProgress.completedArea?.toString() ?? '';
+    _totalHoursController.text = workProgress.hoursWorked?.toString() ?? '';
+    _fixedHourlyRateController.text = workProgress.fixedHourlyRate?.toString() ?? '';
     _workDate = workProgress.workDate ?? DateTime.now();
   }
 
@@ -54,6 +61,9 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
     _hoursWorkedController.dispose();
     _numberOfWorkersController.dispose();
     _companyController.dispose();
+    _completedAreaController.dispose();
+    _totalHoursController.dispose();
+    _fixedHourlyRateController.dispose();
     super.dispose();
   }
 
@@ -65,8 +75,22 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
     try {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
       
-      final hoursWorked = double.tryParse(_hoursWorkedController.text) ?? 0.0;
-      final numberOfWorkers = int.tryParse(_numberOfWorkersController.text) ?? 1;
+      // Get values based on work setup type
+      final hoursWorked = _isExistingComponentWorkSetup 
+          ? (double.tryParse(_totalHoursController.text) ?? 0.0)
+          : (double.tryParse(_hoursWorkedController.text) ?? 0.0);
+      final numberOfWorkers = _isExistingComponentWorkSetup 
+          ? null 
+          : (int.tryParse(_numberOfWorkersController.text) ?? 1);
+      final completedArea = _isExistingComponentWorkSetup 
+          ? (double.tryParse(_completedAreaController.text) ?? 0.0)
+          : null;
+      final fixedHourlyRate = _isExistingComponentWorkSetup 
+          ? (double.tryParse(_fixedHourlyRateController.text) ?? 0.0)
+          : widget.workSetup.fixedHourlyRate;
+      final subcontractorCompany = _isExistingComponentWorkSetup 
+          ? null 
+          : (_companyController.text.trim().isEmpty ? null : _companyController.text.trim());
 
       final workProgress = Labor(
         id: _isEditing ? widget.workProgress!.id : const Uuid().v4(),
@@ -76,12 +100,11 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
         workCategory: widget.workSetup.workCategory, // Same as work setup
         workSetupId: widget.workSetup.id, // Link to work setup
         hoursWorked: hoursWorked,
-        fixedHourlyRate: widget.workSetup.fixedHourlyRate, // Copy from work setup for cost calculation
+        fixedHourlyRate: fixedHourlyRate,
         numberOfWorkers: numberOfWorkers,
+        completedArea: completedArea,
         workDate: _workDate,
-        subcontractorCompany: _companyController.text.trim().isEmpty 
-            ? null 
-            : _companyController.text.trim(),
+        subcontractorCompany: subcontractorCompany,
         createdAt: _isEditing ? widget.workProgress!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -106,8 +129,17 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
           await firestoreService.syncLaborProgressToComponent(
             widget.project.id,
             widget.workSetup.workCategory,
-            recalculateAmountUsed: true,
+            isEdit: _isEditing,
           );
+          
+          // For existing components, sync work setup remaining values
+          if (_isExistingComponentWorkSetup) {
+            await firestoreService.syncWorkSetupRemainingValues(
+              widget.project.id,
+              widget.workSetup.id,
+            );
+            print('💾 WORK_PROGRESS_SCREEN: Synced work setup remaining values');
+          }
           
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -135,13 +167,28 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hoursWorked = double.tryParse(_hoursWorkedController.text) ?? 0.0;
-    final hourlyRate = widget.workSetup.fixedHourlyRate ?? 0.0;
+    // Calculate values based on work setup type
+    final hoursWorked = _isExistingComponentWorkSetup 
+        ? (double.tryParse(_totalHoursController.text) ?? 0.0)
+        : (double.tryParse(_hoursWorkedController.text) ?? 0.0);
+    final hourlyRate = _isExistingComponentWorkSetup 
+        ? (double.tryParse(_fixedHourlyRateController.text) ?? 0.0)
+        : (widget.workSetup.fixedHourlyRate ?? 0.0);
     final progressCost = hoursWorked * hourlyRate;
-    final maxHours = widget.workSetup.maxHours;
-    final remainingHours = maxHours - hoursWorked;
-    final totalBudget = widget.workSetup.totalBudget ?? 0.0;
-    final remainingBudget = totalBudget - progressCost;
+    
+    // For existing components, use remaining values from work setup
+    final maxHours = _isExistingComponentWorkSetup 
+        ? null 
+        : widget.workSetup.maxHours;
+    final remainingHours = maxHours != null ? maxHours - hoursWorked : null;
+    final totalBudget = _isExistingComponentWorkSetup 
+        ? widget.workSetup.remainingBudget ?? 0.0
+        : (widget.workSetup.totalBudget ?? 0.0);
+    
+    // For existing component work setups, calculate remaining budget correctly
+    final remainingBudget = _isExistingComponentWorkSetup 
+        ? ((widget.workSetup.remainingBudget ?? 0.0) + (widget.workProgress?.totalCost ?? 0.0)) - progressCost
+        : totalBudget - progressCost;
 
     return Scaffold(
       appBar: AppBar(
@@ -200,7 +247,9 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
                       ),
                     ),
                     Text(
-                      'Budget: \$${totalBudget.toStringAsFixed(2)} • Rate: \$${hourlyRate.toStringAsFixed(2)}/hr • Max Hours: ${maxHours.toStringAsFixed(1)}',
+                      _isExistingComponentWorkSetup 
+                          ? 'Remaining Area: ${widget.workSetup.remainingArea?.toStringAsFixed(1) ?? '0.0'} sq ft • Remaining Budget: \$${widget.workSetup.remainingBudget?.toStringAsFixed(2) ?? '0.00'}'
+                          : 'Budget: \$${totalBudget.toStringAsFixed(2)} • Rate: \$${hourlyRate.toStringAsFixed(2)}/hr • Max Hours: ${maxHours?.toStringAsFixed(1) ?? '0.0'}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
@@ -231,72 +280,160 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Hours Worked
-              TextFormField(
-                controller: _hoursWorkedController,
-                decoration: const InputDecoration(
-                  labelText: 'Hours Worked',
-                  hintText: 'e.g., 8.5',
-                  prefixIcon: Icon(Icons.schedule),
-                  suffixText: 'hours',
+              // Conditional Fields based on work setup type
+              if (_isExistingComponentWorkSetup) ...[
+                // Completed Area (for existing components)
+                TextFormField(
+                  controller: _completedAreaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Completed Area',
+                    hintText: 'e.g., 50.0',
+                    prefixIcon: Icon(Icons.square_foot),
+                    suffixText: 'sq ft',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter completed area';
+                    }
+                    final area = double.tryParse(value);
+                    if (area == null || area <= 0) {
+                      return 'Please enter valid area';
+                    }
+                    // Check against remaining area
+                    final remainingArea = widget.workSetup.remainingArea ?? 0.0;
+                    if (area > remainingArea && !_isEditing) {
+                      return 'Cannot exceed remaining area (${remainingArea.toStringAsFixed(1)} sq ft)';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for cost preview
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter hours worked';
-                  }
-                  final hours = double.tryParse(value);
-                  if (hours == null || hours <= 0) {
-                    return 'Please enter valid hours';
-                  }
-                  // Check against remaining hours
-                  if (hours > remainingHours && !_isEditing) {
-                    return 'Cannot exceed remaining hours (${remainingHours.toStringAsFixed(1)})';
-                  }
-                  return null;
-                },
-                onChanged: (value) => setState(() {}), // Trigger rebuild for cost preview
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Number of Workers
-              TextFormField(
-                controller: _numberOfWorkersController,
-                decoration: const InputDecoration(
-                  labelText: 'Number of Workers',
-                  hintText: 'e.g., 3',
-                  prefixIcon: Icon(Icons.people),
-                  suffixText: 'people',
+                // Total Hours (for existing components)
+                TextFormField(
+                  controller: _totalHoursController,
+                  decoration: const InputDecoration(
+                    labelText: 'Total Hours',
+                    hintText: 'e.g., 8.5',
+                    prefixIcon: Icon(Icons.schedule),
+                    suffixText: 'hours',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter total hours';
+                    }
+                    final hours = double.tryParse(value);
+                    if (hours == null || hours <= 0) {
+                      return 'Please enter valid hours';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for cost preview
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter number of workers';
-                  }
-                  final workers = int.tryParse(value);
-                  if (workers == null || workers <= 0) {
-                    return 'Please enter valid number of workers';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Company Name (Optional)
-              TextFormField(
-                controller: _companyController,
-                decoration: const InputDecoration(
-                  labelText: 'Company Name (Optional)',
-                  hintText: 'e.g., ABC Construction',
-                  prefixIcon: Icon(Icons.business),
+                // Fixed Hourly Rate (for existing components)
+                TextFormField(
+                  controller: _fixedHourlyRateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Fixed Hourly Rate',
+                    hintText: 'e.g., 25.00',
+                    prefixIcon: Icon(Icons.attach_money),
+                    suffixText: '/ hour',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter hourly rate';
+                    }
+                    final rate = double.tryParse(value);
+                    if (rate == null || rate <= 0) {
+                      return 'Please enter valid hourly rate';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for cost preview
                 ),
-              ),
+              ] else ...[
+                // Hours Worked (for custom components)
+                TextFormField(
+                  controller: _hoursWorkedController,
+                  decoration: const InputDecoration(
+                    labelText: 'Hours Worked',
+                    hintText: 'e.g., 8.5',
+                    prefixIcon: Icon(Icons.schedule),
+                    suffixText: 'hours',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter hours worked';
+                    }
+                    final hours = double.tryParse(value);
+                    if (hours == null || hours <= 0) {
+                      return 'Please enter valid hours';
+                    }
+                    // Check against remaining hours
+                    if (remainingHours != null && hours > remainingHours && !_isEditing) {
+                      return 'Cannot exceed remaining hours (${remainingHours.toStringAsFixed(1)})';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) => setState(() {}), // Trigger rebuild for cost preview
+                ),
+                const SizedBox(height: 16),
+
+                // Number of Workers (for custom components)
+                TextFormField(
+                  controller: _numberOfWorkersController,
+                  decoration: const InputDecoration(
+                    labelText: 'Number of Workers',
+                    hintText: 'e.g., 3',
+                    prefixIcon: Icon(Icons.people),
+                    suffixText: 'people',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter number of workers';
+                    }
+                    final workers = int.tryParse(value);
+                    if (workers == null || workers <= 0) {
+                      return 'Please enter valid number of workers';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Company Name (Optional) (for custom components)
+                TextFormField(
+                  controller: _companyController,
+                  decoration: const InputDecoration(
+                    labelText: 'Company Name (Optional)',
+                    hintText: 'e.g., ABC Construction',
+                    prefixIcon: Icon(Icons.business),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Progress Cost Preview
@@ -331,12 +468,22 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      _buildSummaryRow('Hours Worked:', '${hoursWorked.toStringAsFixed(1)} hours'),
-                      _buildSummaryRow('Hourly Rate:', '\$${hourlyRate.toStringAsFixed(2)} / hour'),
-                      _buildSummaryRow('Progress Cost:', '\$${progressCost.toStringAsFixed(2)}'),
-                      const Divider(),
-                      _buildSummaryRow('Remaining Hours:', '${remainingHours.toStringAsFixed(1)} hours', isHighlight: true),
-                      _buildSummaryRow('Remaining Budget:', '\$${remainingBudget.toStringAsFixed(2)}', isHighlight: true),
+                      if (_isExistingComponentWorkSetup) ...[
+                        _buildSummaryRow('Completed Area:', '${_completedAreaController.text} sq ft'),
+                        _buildSummaryRow('Total Hours:', '${hoursWorked.toStringAsFixed(1)} hours'),
+                        _buildSummaryRow('Hourly Rate:', '\$${hourlyRate.toStringAsFixed(2)} / hour'),
+                        _buildSummaryRow('Progress Cost:', '\$${progressCost.toStringAsFixed(2)}'),
+                        const Divider(),
+                        _buildSummaryRow('Remaining Area:', '${((widget.workSetup.remainingArea ?? 0.0) + (widget.workProgress?.completedArea ?? 0.0)) - (double.tryParse(_completedAreaController.text) ?? 0.0)} sq ft', isHighlight: true),
+                        _buildSummaryRow('Remaining Budget:', '\$${remainingBudget.toStringAsFixed(2)}', isHighlight: true),
+                      ] else ...[
+                        _buildSummaryRow('Hours Worked:', '${hoursWorked.toStringAsFixed(1)} hours'),
+                        _buildSummaryRow('Hourly Rate:', '\$${hourlyRate.toStringAsFixed(2)} / hour'),
+                        _buildSummaryRow('Progress Cost:', '\$${progressCost.toStringAsFixed(2)}'),
+                        const Divider(),
+                        _buildSummaryRow('Remaining Hours:', '${remainingHours?.toStringAsFixed(1) ?? '0.0'} hours', isHighlight: true),
+                        _buildSummaryRow('Remaining Budget:', '\$${remainingBudget.toStringAsFixed(2)}', isHighlight: true),
+                      ],
                     ],
                   ),
                 ),
