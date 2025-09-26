@@ -141,10 +141,19 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              _showArchived ? Icons.archive : Icons.construction,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            // Logo at center when no projects
+            Image.asset(
+              'logo2.png',
+              height: 120,
+              width: 120,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Konstruction Tracker',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -166,31 +175,52 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: projectsToShow.length,
-      itemBuilder: (context, index) {
-        return ProjectCard(
-          project: projectsToShow[index],
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectDetailsScreen(
-                  project: projectsToShow[index],
-                ),
+    return Column(
+      children: [
+        // Projects List
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: projectsToShow.length,
+            itemBuilder: (context, index) {
+              return ProjectCard(
+                project: projectsToShow[index],
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProjectDetailsScreen(
+                        project: projectsToShow[index],
+                      ),
+                    ),
+                  );
+                },
+                onEdit: () => _showEditProject(projectsToShow[index]),
+                onArchiveToggle: () async {
+                  // TODO: Implement archive toggle
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Archive functionality coming soon')),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        
+        // Logo at bottom when projects exist
+        Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Image.asset(
+                'logo2.png',
+                height: 300,
+                width: 300,
               ),
-            );
-          },
-          onEdit: () => _showEditProject(projectsToShow[index]),
-          onArchiveToggle: () async {
-            // TODO: Implement archive toggle
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Archive functionality coming soon')),
-            );
-          },
-        );
-      },
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
