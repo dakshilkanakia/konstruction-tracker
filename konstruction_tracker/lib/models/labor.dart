@@ -13,10 +13,13 @@ class Labor {
   // Contract setup fields (for entryType = contract)
   final double? totalSqFt; // Total square feet for the contract
   final double? ratePerSqFt; // Rate per square foot
+  final double? totalConcrete; // Total concrete for the contract (cubic yards)
+  final double? initialConcretePoured; // Initial concrete already poured (cubic yards)
   
   // Progress entry fields (for entryType = progress)
   final String? contractId; // Links to the contract this progress belongs to
   final double? completedSqFt; // Square feet completed in this entry
+  final double? concretePoured; // Concrete poured in this entry (cubic yards)
   final DateTime? workDate; // Date work was completed
   final String? subcontractorCompany; // Optional company name
   
@@ -31,6 +34,7 @@ class Labor {
   // Work setup fields for existing components
   final double? remainingArea; // Remaining area for existing component work setup
   final double? remainingBudget; // Remaining budget for existing component work setup
+  final double? remainingHours; // Remaining hours for custom component work setup
   
   // Legacy fields (keeping for backward compatibility)
   final String? description;
@@ -50,10 +54,13 @@ class Labor {
     // Contract setup fields
     this.totalSqFt,
     this.ratePerSqFt,
+    this.totalConcrete,
+    this.initialConcretePoured,
     
     // Progress entry fields
     this.contractId,
     this.completedSqFt,
+    this.concretePoured,
     this.workDate,
     this.subcontractorCompany,
     
@@ -68,6 +75,7 @@ class Labor {
     // Work setup fields for existing components
     this.remainingArea,
     this.remainingBudget,
+    this.remainingHours,
     
     // Legacy fields
     this.description,
@@ -179,6 +187,22 @@ class Labor {
   static double calculateRemainingBudget(double totalBudget, double completedBudget) {
     return (totalBudget - completedBudget).clamp(0.0, totalBudget);
   }
+  
+  // Concrete progress calculation helpers
+  static double calculateTotalConcretePoured(List<Labor> progressEntries) {
+    return progressEntries
+        .where((entry) => entry.isProgress && entry.concretePoured != null)
+        .fold(0.0, (sum, entry) => sum + entry.concretePoured!);
+  }
+  
+  static double calculateConcreteProgressPercentage(double totalConcrete, double concretePoured) {
+    if (totalConcrete <= 0) return 0.0;
+    return (concretePoured / totalConcrete * 100); // Allow over 100% for overpour
+  }
+  
+  static double calculateRemainingConcrete(double totalConcrete, double concretePoured) {
+    return (totalConcrete - concretePoured).clamp(0.0, totalConcrete);
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -191,10 +215,13 @@ class Labor {
       // Contract setup fields
       'totalSqFt': totalSqFt,
       'ratePerSqFt': ratePerSqFt,
+      'totalConcrete': totalConcrete,
+      'initialConcretePoured': initialConcretePoured,
       
       // Progress entry fields
       'contractId': contractId,
       'completedSqFt': completedSqFt,
+      'concretePoured': concretePoured,
       'workDate': workDate != null ? Timestamp.fromDate(workDate!) : null,
       'subcontractorCompany': subcontractorCompany,
       
@@ -209,6 +236,7 @@ class Labor {
       // Work setup fields for existing components
       'remainingArea': remainingArea,
       'remainingBudget': remainingBudget,
+      'remainingHours': remainingHours,
       
       // Legacy fields
       'description': description,
@@ -231,10 +259,13 @@ class Labor {
       // Contract setup fields
       totalSqFt: map['totalSqFt']?.toDouble(),
       ratePerSqFt: map['ratePerSqFt']?.toDouble(),
+      totalConcrete: map['totalConcrete']?.toDouble(),
+      initialConcretePoured: map['initialConcretePoured']?.toDouble(),
       
       // Progress entry fields
       contractId: map['contractId'],
       completedSqFt: map['completedSqFt']?.toDouble(),
+      concretePoured: map['concretePoured']?.toDouble(),
       workDate: map['workDate'] != null ? (map['workDate'] as Timestamp).toDate() : null,
       subcontractorCompany: map['subcontractorCompany'],
       
@@ -249,6 +280,7 @@ class Labor {
       // Work setup fields for existing components
       remainingArea: map['remainingArea']?.toDouble(),
       remainingBudget: map['remainingBudget']?.toDouble(),
+      remainingHours: map['remainingHours']?.toDouble(),
       
       // Legacy fields
       description: map['description'],
@@ -270,10 +302,13 @@ class Labor {
     // Contract setup fields
     double? totalSqFt,
     double? ratePerSqFt,
+    double? totalConcrete,
+    double? initialConcretePoured,
     
     // Progress entry fields
     String? contractId,
     double? completedSqFt,
+    double? concretePoured,
     DateTime? workDate,
     String? subcontractorCompany,
     
@@ -288,6 +323,7 @@ class Labor {
     // Work setup fields for existing components
     double? remainingArea,
     double? remainingBudget,
+    double? remainingHours,
     
     // Legacy fields
     String? description,
@@ -307,10 +343,13 @@ class Labor {
       // Contract setup fields
       totalSqFt: totalSqFt ?? this.totalSqFt,
       ratePerSqFt: ratePerSqFt ?? this.ratePerSqFt,
+      totalConcrete: totalConcrete ?? this.totalConcrete,
+      initialConcretePoured: initialConcretePoured ?? this.initialConcretePoured,
       
       // Progress entry fields
       contractId: contractId ?? this.contractId,
       completedSqFt: completedSqFt ?? this.completedSqFt,
+      concretePoured: concretePoured ?? this.concretePoured,
       workDate: workDate ?? this.workDate,
       subcontractorCompany: subcontractorCompany ?? this.subcontractorCompany,
       
@@ -325,6 +364,7 @@ class Labor {
       // Work setup fields for existing components
       remainingArea: remainingArea ?? this.remainingArea,
       remainingBudget: remainingBudget ?? this.remainingBudget,
+      remainingHours: remainingHours ?? this.remainingHours,
       
       // Legacy fields
       description: description ?? this.description,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -36,12 +37,123 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
   DateTime _workDate = DateTime.now();
   bool get _isEditing => widget.workProgress != null;
   bool get _isExistingComponentWorkSetup => widget.workSetup.remainingArea != null && widget.workSetup.remainingBudget != null;
+  
+  // Local work setup data that can be updated
+  Labor? _currentWorkSetup;
 
   @override
   void initState() {
     super.initState();
     if (_isEditing) {
       _populateFields();
+    }
+    // Refresh work setup data to get latest remaining values
+    _refreshWorkSetupData();
+    
+    // Also manually sync the work setup to ensure it has the latest remaining values
+    _manualSyncWorkSetup();
+  }
+
+  Future<void> _refreshWorkSetupData() async {
+    try {
+      if (kDebugMode) print('🔄 REFRESHING: Starting work setup data refresh for ${widget.workSetup.id}');
+      
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final allLabor = await firestoreService.getProjectLabor(widget.project.id);
+      final updatedWorkSetup = allLabor.where((l) => l.id == widget.workSetup.id && l.isWorkSetup).firstOrNull;
+      
+      if (kDebugMode) {
+        print('🔄 REFRESHING: Found ${allLabor.length} total labor entries');
+        print('🔄 REFRESHING: Found work setup: ${updatedWorkSetup != null}');
+        if (updatedWorkSetup != null) {
+          print('🔄 REFRESHING: Work setup remainingHours: ${updatedWorkSetup.remainingHours}');
+          print('🔄 REFRESHING: Work setup remainingBudget: ${updatedWorkSetup.remainingBudget}');
+        }
+      }
+      
+      if (updatedWorkSetup != null && mounted) {
+        setState(() {
+          // Update the local work setup with latest data
+          _currentWorkSetup = updatedWorkSetup;
+        });
+        
+        if (kDebugMode) {
+          print('✅ REFRESHED: Work setup data refreshed');
+          print('  New remainingHours: ${updatedWorkSetup.remainingHours}');
+          print('  New remainingBudget: ${updatedWorkSetup.remainingBudget}');
+        }
+      } else {
+        if (kDebugMode) print('❌ REFRESHING: Work setup not found or not mounted');
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ Error refreshing work setup data: $e');
+    }
+  }
+
+  Future<void> _manualSyncWorkSetup() async {
+    try {
+      if (kDebugMode) print('🔄 MANUAL_SYNC: Manually syncing work setup ${widget.workSetup.id}');
+      
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      
+      // Try both sync methods
+      final existingSyncSuccess = await firestoreService.syncWorkSetupRemainingValues(
+        widget.project.id,
+        widget.workSetup.id,
+      );
+      
+      final customSyncSuccess = await firestoreService.syncCustomWorkSetupRemainingValues(
+        widget.project.id,
+        widget.workSetup.id,
+      );
+      
+      if (kDebugMode) {
+        print('🔄 MANUAL_SYNC: Existing component sync: $existingSyncSuccess');
+        print('🔄 MANUAL_SYNC: Custom component sync: $customSyncSuccess');
+      }
+      
+      // Refresh the work setup data after sync
+      await _refreshWorkSetupData();
+      
+    } catch (e) {
+      if (kDebugMode) print('❌ Error in manual sync: $e');
+    }
+  }
+
+  // Direct calculation methods that don't rely on synced values
+  double? _calculateRemainingHoursDirectly(Labor workSetup, double currentEntryHours) {
+    try {
+      // First try to use synced remaining hours if available
+      if (workSetup.remainingHours != null) {
+        if (kDebugMode) print('🔍 DIRECT_CALC: Using synced remainingHours: ${workSetup.remainingHours}');
+        return workSetup.remainingHours! - currentEntryHours;
+      }
+      
+      // If not available, calculate from original max hours
+      final originalMaxHours = workSetup.maxHours ?? 0.0;
+      if (kDebugMode) print('🔍 DIRECT_CALC: Using original maxHours: $originalMaxHours');
+      return originalMaxHours - currentEntryHours;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error calculating remaining hours directly: $e');
+      return null;
+    }
+  }
+
+  double _calculateRemainingBudgetDirectly(Labor workSetup, double currentEntryCost) {
+    try {
+      // First try to use synced remaining budget if available
+      if (workSetup.remainingBudget != null) {
+        if (kDebugMode) print('🔍 DIRECT_CALC: Using synced remainingBudget: ${workSetup.remainingBudget}');
+        return workSetup.remainingBudget! - currentEntryCost;
+      }
+      
+      // If not available, calculate from original total budget
+      final originalTotalBudget = workSetup.totalBudget ?? 0.0;
+      if (kDebugMode) print('🔍 DIRECT_CALC: Using original totalBudget: $originalTotalBudget');
+      return originalTotalBudget - currentEntryCost;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error calculating remaining budget directly: $e');
+      return 0.0;
     }
   }
 
@@ -125,6 +237,13 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
         setState(() => _isLoading = false);
         
         if (success) {
+          // Debug: Check work setup type
+          print('💾 WORK_PROGRESS_SCREEN: Work setup type check');
+          print('  Work Setup ID: ${widget.workSetup.id}');
+          print('  remainingArea: ${widget.workSetup.remainingArea}');
+          print('  remainingBudget: ${widget.workSetup.remainingBudget}');
+          print('  isExistingComponentWorkSetup: $_isExistingComponentWorkSetup');
+          
           // Sync progress cost to matching component
           await firestoreService.syncLaborProgressToComponent(
             widget.project.id,
@@ -132,14 +251,22 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
             isEdit: _isEditing,
           );
           
-          // For existing components, sync work setup remaining values
-          if (_isExistingComponentWorkSetup) {
-            await firestoreService.syncWorkSetupRemainingValues(
-              widget.project.id,
-              widget.workSetup.id,
-            );
-            print('💾 WORK_PROGRESS_SCREEN: Synced work setup remaining values');
-          }
+          // Try both sync methods - let the sync methods handle type detection
+          print('💾 WORK_PROGRESS_SCREEN: Attempting to sync work setup ${widget.workSetup.id}');
+          
+          // First try existing component sync
+          final existingSyncSuccess = await firestoreService.syncWorkSetupRemainingValues(
+            widget.project.id,
+            widget.workSetup.id,
+          );
+          print('💾 WORK_PROGRESS_SCREEN: Existing component sync result: $existingSyncSuccess');
+          
+          // Then try custom component sync
+          final customSyncSuccess = await firestoreService.syncCustomWorkSetupRemainingValues(
+            widget.project.id,
+            widget.workSetup.id,
+          );
+          print('💾 WORK_PROGRESS_SCREEN: Custom component sync result: $customSyncSuccess');
           
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -176,19 +303,51 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
         : (widget.workSetup.fixedHourlyRate ?? 0.0);
     final progressCost = hoursWorked * hourlyRate;
     
+    // Use refreshed work setup data if available, otherwise use original
+    final workSetup = _currentWorkSetup ?? widget.workSetup;
+    
+    // Debug: Check if work setup has synced values
+    if (kDebugMode) {
+      print('🔍 WORK_SETUP_DATA: Work setup ${workSetup.id}');
+      print('  remainingHours: ${workSetup.remainingHours}');
+      print('  remainingBudget: ${workSetup.remainingBudget}');
+      print('  maxHours: ${workSetup.maxHours}');
+      print('  totalBudget: ${workSetup.totalBudget}');
+    }
+    
     // For existing components, use remaining values from work setup
     final maxHours = _isExistingComponentWorkSetup 
         ? null 
-        : widget.workSetup.maxHours;
-    final remainingHours = maxHours != null ? maxHours - hoursWorked : null;
-    final totalBudget = _isExistingComponentWorkSetup 
-        ? widget.workSetup.remainingBudget ?? 0.0
-        : (widget.workSetup.totalBudget ?? 0.0);
+        : workSetup.maxHours;
     
-    // For existing component work setups, calculate remaining budget correctly
+    // Calculate remaining hours correctly
+    // For custom component work setups, use synced remaining hours or calculate from original max hours
+    final remainingHours = _isExistingComponentWorkSetup 
+        ? null 
+        : _calculateRemainingHoursDirectly(workSetup, hoursWorked);
+    
+    final totalBudget = _isExistingComponentWorkSetup 
+        ? workSetup.remainingBudget ?? 0.0
+        : (workSetup.totalBudget ?? 0.0);
+    
+    // Calculate remaining budget correctly for both types
     final remainingBudget = _isExistingComponentWorkSetup 
-        ? ((widget.workSetup.remainingBudget ?? 0.0) + (widget.workProgress?.totalCost ?? 0.0)) - progressCost
-        : totalBudget - progressCost;
+        ? ((workSetup.remainingBudget ?? 0.0) + (widget.workProgress?.totalCost ?? 0.0)) - progressCost
+        : _calculateRemainingBudgetDirectly(workSetup, progressCost);
+    
+    // Debug logging for progress summary calculation
+    if (kDebugMode) {
+      print('🔍 PROGRESS_SUMMARY: Calculating progress summary for work setup ${widget.workSetup.id}');
+      print('  Work Setup Type: ${_isExistingComponentWorkSetup ? "Existing Component" : "Custom Component"}');
+      print('  Work Setup remainingHours: ${widget.workSetup.remainingHours}');
+      print('  Work Setup remainingBudget: ${widget.workSetup.remainingBudget}');
+      print('  Work Setup maxHours: ${widget.workSetup.maxHours}');
+      print('  Work Setup totalBudget: ${widget.workSetup.totalBudget}');
+      print('  Current entry hoursWorked: $hoursWorked');
+      print('  Current entry progressCost: $progressCost');
+      print('  Calculated remainingHours: $remainingHours');
+      print('  Calculated remainingBudget: $remainingBudget');
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -588,4 +747,5 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
       }
     }
   }
+
 }

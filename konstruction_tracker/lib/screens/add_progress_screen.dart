@@ -26,6 +26,7 @@ class AddProgressScreen extends StatefulWidget {
 class _AddProgressScreenState extends State<AddProgressScreen> {
   final _formKey = GlobalKey<FormState>();
   final _completedSqFtController = TextEditingController();
+  final _concretePouredController = TextEditingController();
   final _subcontractorController = TextEditingController();
 
   bool _isLoading = false;
@@ -43,6 +44,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
   void _populateFields() {
     final progress = widget.progress!;
     _completedSqFtController.text = progress.completedSqFt?.toString() ?? '';
+    _concretePouredController.text = progress.concretePoured?.toString() ?? '';
     _subcontractorController.text = progress.subcontractorCompany ?? '';
     _workDate = progress.workDate ?? DateTime.now();
   }
@@ -50,6 +52,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
   @override
   void dispose() {
     _completedSqFtController.dispose();
+    _concretePouredController.dispose();
     _subcontractorController.dispose();
     super.dispose();
   }
@@ -63,6 +66,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
       
       final completedSqFt = double.tryParse(_completedSqFtController.text) ?? 0.0;
+      final concretePoured = double.tryParse(_concretePouredController.text);
 
       final progress = Labor(
         id: _isEditing ? widget.progress!.id : const Uuid().v4(),
@@ -72,6 +76,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
         workCategory: widget.contract.workCategory, // Same as contract
         contractId: widget.contract.id, // Link to contract
         completedSqFt: completedSqFt,
+        concretePoured: concretePoured,
         ratePerSqFt: widget.contract.ratePerSqFt, // Copy from contract for cost calculation
         workDate: _workDate,
         subcontractorCompany: _subcontractorController.text.trim().isEmpty 
@@ -125,6 +130,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
   @override
   Widget build(BuildContext context) {
     final completedSqFt = double.tryParse(_completedSqFtController.text) ?? 0.0;
+    final concretePoured = double.tryParse(_concretePouredController.text);
     final ratePerSqFt = widget.contract.ratePerSqFt ?? 0.0;
     final progressCost = completedSqFt * ratePerSqFt;
 
@@ -248,6 +254,58 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Concrete Poured (Optional)
+              TextFormField(
+                controller: _concretePouredController,
+                decoration: const InputDecoration(
+                  labelText: 'Concrete Poured (Optional)',
+                  hintText: 'e.g., 5.5',
+                  prefixIcon: Icon(Icons.construction),
+                  suffixText: 'cu yd',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    final concrete = double.tryParse(value);
+                    if (concrete == null || concrete < 0) {
+                      return 'Please enter a valid concrete amount';
+                    }
+                  }
+                  return null;
+                },
+                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+              ),
+              
+              // Concrete overpour warning (if contract has total concrete)
+              if (widget.contract.totalConcrete != null && widget.contract.totalConcrete! > 0)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Concrete poured can exceed total concrete (${widget.contract.totalConcrete!.toStringAsFixed(1)} cu yd) if needed.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
+
               // Subcontractor Company (Optional)
               TextFormField(
                 controller: _subcontractorController,
@@ -292,6 +350,8 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
                       ),
                       const SizedBox(height: 12),
                       _buildSummaryRow('Completed:', '${completedSqFt.toStringAsFixed(1)} sq ft'),
+                      if (concretePoured != null)
+                        _buildSummaryRow('Concrete Poured:', '${concretePoured.toStringAsFixed(1)} cu yd'),
                       _buildSummaryRow('Rate:', '\$${ratePerSqFt.toStringAsFixed(2)} / sq ft'),
                       const Divider(),
                       _buildSummaryRow(

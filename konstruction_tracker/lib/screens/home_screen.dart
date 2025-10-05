@@ -106,6 +106,31 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               PopupMenuItem(
                 child: const ListTile(
+                  leading: Icon(Icons.delete),
+                  title: Text('Delete Seat Wall Labor'),
+                ),
+                onTap: () async {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Deleting Seat Wall labor entry...')),
+                  );
+                  
+                  final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                  final success = await firestoreService.deleteSeatWallLaborEntry('4b3206d6-64f8-4d9c-a78e-f1654e452317');
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(success 
+                            ? 'Seat Wall labor entry deleted successfully!' 
+                            : 'Failed to delete Seat Wall labor entry'),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+              PopupMenuItem(
+                child: const ListTile(
                   leading: Icon(Icons.logout),
                   title: Text('Sign Out'),
                 ),
@@ -212,11 +237,11 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Image.asset(
-                'logo2.png',
-                height: 300,
-                width: 300,
-              ),
+            Image.asset(
+              'logo2.png',
+              height: 300,
+              width: 300,
+            ),
             ],
           ),
         ),

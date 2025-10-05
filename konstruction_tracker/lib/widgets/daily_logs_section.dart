@@ -167,8 +167,8 @@ class _DailyLogsSectionState extends State<DailyLogsSection> {
       );
     }
 
-    // Sort logs by date (newest first)
-    _dailyLogs.sort((a, b) => b.date.compareTo(a.date));
+    // Sort logs by date (oldest first - ascending order)
+    _dailyLogs.sort((a, b) => a.date.compareTo(b.date));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

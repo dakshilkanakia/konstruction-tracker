@@ -93,17 +93,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       return;
     }
 
-    // Validation: amount used cannot exceed component budget
-    if (componentBudget > 0 && amountUsed > componentBudget) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Amount used cannot exceed component budget'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    // Note: Amount used can exceed component budget - warning is shown in UI
     
     // For zero budget components, amount used should be zero
     if (componentBudget == 0 && amountUsed > 0) {
@@ -174,6 +164,9 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       originalAmountUsed: _isEditing && amountUsed == widget.component!.amountUsed 
           ? widget.component!.originalAmountUsed 
           : amountUsed,
+      originalConcretePoured: _isEditing && concretePoured == widget.component!.concretePoured 
+          ? widget.component!.originalConcretePoured 
+          : concretePoured,
       createdAt: _isEditing ? widget.component!.createdAt : DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -415,6 +408,57 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
                     setState(() {});
                   }
                 }
+              },
+            ),
+            
+            // Over-budget warning for component
+            Builder(
+              builder: (context) {
+                final componentBudget = double.tryParse(_componentBudgetController.text) ?? 0.0;
+                final amountUsed = double.tryParse(_amountUsedController.text) ?? 0.0;
+                
+                if (componentBudget > 0 && amountUsed > componentBudget) {
+                  final excessAmount = amountUsed - componentBudget;
+                  final excessPercentage = (excessAmount / componentBudget * 100);
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Amount used exceeds component budget',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.orange.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Excess: \$${excessAmount.toStringAsFixed(2)} (${excessPercentage.toStringAsFixed(1)}% over budget)',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.orange.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
               },
             ),
             const SizedBox(height: 16),

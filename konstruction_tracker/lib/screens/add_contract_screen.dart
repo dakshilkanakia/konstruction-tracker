@@ -26,6 +26,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
   final _workCategoryController = TextEditingController();
   final _totalSqFtController = TextEditingController();
   final _ratePerSqFtController = TextEditingController();
+  final _totalConcreteController = TextEditingController();
+  final _initialConcretePouredController = TextEditingController();
 
   bool _isLoading = false;
   bool _isLoadingComponents = true;
@@ -43,6 +45,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
     final contract = widget.contract!;
     _totalSqFtController.text = contract.totalSqFt?.toString() ?? '';
     _ratePerSqFtController.text = contract.ratePerSqFt?.toString() ?? '';
+    _totalConcreteController.text = contract.totalConcrete?.toString() ?? '';
+    _initialConcretePouredController.text = contract.initialConcretePoured?.toString() ?? '';
     
     // Check if work category matches an existing component
     final matchingComponent = _components.where((c) => c.name == contract.workCategory).firstOrNull;
@@ -81,6 +85,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
     _workCategoryController.dispose();
     _totalSqFtController.dispose();
     _ratePerSqFtController.dispose();
+    _totalConcreteController.dispose();
+    _initialConcretePouredController.dispose();
     super.dispose();
   }
 
@@ -102,6 +108,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
       
       final totalSqFt = double.tryParse(_totalSqFtController.text) ?? 0.0;
       final ratePerSqFt = double.tryParse(_ratePerSqFtController.text) ?? 0.0;
+      final totalConcrete = double.tryParse(_totalConcreteController.text);
+      final initialConcretePoured = double.tryParse(_initialConcretePouredController.text);
 
       final contract = Labor(
         id: _isEditing ? widget.contract!.id : const Uuid().v4(),
@@ -113,6 +121,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
             : _selectedComponent!,
         totalSqFt: totalSqFt,
         ratePerSqFt: ratePerSqFt,
+        totalConcrete: totalConcrete,
+        initialConcretePoured: initialConcretePoured,
         createdAt: _isEditing ? widget.contract!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -169,6 +179,8 @@ class _AddContractScreenState extends State<AddContractScreen> {
   Widget build(BuildContext context) {
     final totalSqFt = double.tryParse(_totalSqFtController.text) ?? 0.0;
     final ratePerSqFt = double.tryParse(_ratePerSqFtController.text) ?? 0.0;
+    final totalConcrete = double.tryParse(_totalConcreteController.text);
+    final initialConcretePoured = double.tryParse(_initialConcretePouredController.text);
     final totalBudget = totalSqFt * ratePerSqFt;
 
     return Scaffold(
@@ -357,6 +369,118 @@ class _AddContractScreenState extends State<AddContractScreen> {
                 },
                 onChanged: (value) => setState(() {}), // Trigger rebuild for budget preview
               ),
+              const SizedBox(height: 16),
+
+              // Total Concrete (Optional)
+              TextFormField(
+                controller: _totalConcreteController,
+                decoration: const InputDecoration(
+                  labelText: 'Total Concrete (Optional)',
+                  hintText: 'e.g., 25.5',
+                  prefixIcon: Icon(Icons.construction),
+                  suffixText: 'cu yd',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    final concrete = double.tryParse(value);
+                    if (concrete == null || concrete < 0) {
+                      return 'Please enter a valid concrete amount';
+                    }
+                  }
+                  return null;
+                },
+                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+              ),
+              const SizedBox(height: 16),
+
+              // Initial Concrete Poured (Optional)
+              TextFormField(
+                controller: _initialConcretePouredController,
+                decoration: const InputDecoration(
+                  labelText: 'Initial Concrete Poured (Optional)',
+                  hintText: 'e.g., 5.0',
+                  prefixIcon: Icon(Icons.construction),
+                  suffixText: 'cu yd',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    final concrete = double.tryParse(value);
+                    if (concrete == null || concrete < 0) {
+                      return 'Please enter a valid concrete amount';
+                    }
+                  }
+                  return null;
+                },
+                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+              ),
+              
+              // Initial concrete overpour warning (if applicable)
+              if (totalConcrete != null && totalConcrete > 0)
+                Builder(
+                  builder: (context) {
+                    final initialConcrete = double.tryParse(_initialConcretePouredController.text) ?? 0.0;
+                    if (initialConcrete > totalConcrete) {
+                      return Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning, color: Colors.orange, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Initial concrete poured (${initialConcrete.toStringAsFixed(1)} cu yd) exceeds total concrete (${totalConcrete.toStringAsFixed(1)} cu yd).',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.orange.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              
+              // Concrete overpour warning (if applicable)
+              if (totalConcrete != null && totalConcrete > 0)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Concrete poured can exceed total concrete if needed. Progress percentage will go above 100% for overpour.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 24),
 
               // Budget Preview
@@ -393,6 +517,10 @@ class _AddContractScreenState extends State<AddContractScreen> {
                       const SizedBox(height: 12),
                       _buildSummaryRow('Total Area:', '${totalSqFt.toStringAsFixed(1)} sq ft'),
                       _buildSummaryRow('Rate:', '\$${ratePerSqFt.toStringAsFixed(2)} / sq ft'),
+                      if (totalConcrete != null)
+                        _buildSummaryRow('Total Concrete:', '${totalConcrete.toStringAsFixed(1)} cu yd'),
+                      if (initialConcretePoured != null)
+                        _buildSummaryRow('Initial Concrete Poured:', '${initialConcretePoured.toStringAsFixed(1)} cu yd'),
                       const Divider(),
                       _buildSummaryRow(
                         'Total Contract Value:', 

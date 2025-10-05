@@ -196,6 +196,42 @@ class FirestoreService {
     }
   }
 
+  // Delete specific "Seat Wall" labor entry (for fixing budget discrepancy)
+  Future<bool> deleteSeatWallLaborEntry(String projectId) async {
+    try {
+      if (kDebugMode) print('🗑️ DELETING: Seat Wall labor entry for project: $projectId');
+      
+      // Get all labor entries for this project
+      final laborEntries = await getProjectLabor(projectId);
+      
+      // Find the specific "Seat Wall" labor entry
+      final seatWallLabor = laborEntries.where((l) => 
+        l.workCategory == 'Seat Wall' && l.totalCost == 600.0
+      ).toList();
+      
+      if (seatWallLabor.isEmpty) {
+        if (kDebugMode) print('❌ No Seat Wall labor entry found with \$600 cost');
+        return false;
+      }
+      
+      if (kDebugMode) print('Found ${seatWallLabor.length} Seat Wall labor entries to delete');
+      
+      // Delete each Seat Wall labor entry
+      for (final labor in seatWallLabor) {
+        await _db.collection('labor').doc(labor.id).delete();
+        if (kDebugMode) print('✅ Deleted Seat Wall labor entry: ${labor.id} (Cost: \$${labor.totalCost})');
+      }
+      
+      if (kDebugMode) print('✅ Successfully deleted ${seatWallLabor.length} Seat Wall labor entries');
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error deleting Seat Wall labor entry: $e');
+      }
+      return false;
+    }
+  }
+
   // Materials CRUD
   Future<List<Material>> getProjectMaterials(String projectId) async {
     try {
@@ -475,6 +511,15 @@ class FirestoreService {
       
       final totalLaborCompletedArea = totalContractCompletedArea + totalWorkCompletedArea;
       
+      // Sum concrete poured from contract progress entries
+      final totalConcretePoured = contractProgressEntries
+          .fold(0.0, (sum, entry) => sum + (entry.concretePoured ?? 0.0));
+      
+      // Add initial concrete poured from the contract itself
+      final contract = allLabor.where((l) => l.workCategory == workCategory && l.isContract).firstOrNull;
+      final initialConcretePoured = contract?.initialConcretePoured ?? 0.0;
+      final totalConcretePouredWithInitial = totalConcretePoured + initialConcretePoured;
+      
       // Calculate total labor cost from all labor entries
       final totalLaborCost = componentLabor
           .fold(0.0, (sum, entry) => sum + entry.totalCost);
@@ -484,6 +529,7 @@ class FirestoreService {
       // This ensures consistency and prevents calculation errors
       final newCompletedArea = matchingComponent.originalCompletedArea + totalLaborCompletedArea;
       final newAmountUsed = matchingComponent.originalAmountUsed + totalLaborCost;
+      final newConcretePoured = matchingComponent.originalConcretePoured + totalConcretePouredWithInitial;
       
       // Debug: Check if this would cause an increase
       if (kDebugMode && newAmountUsed > matchingComponent.amountUsed) {
@@ -498,27 +544,36 @@ class FirestoreService {
         print('🔄 SYNC: Recalculating component "$workCategory" preserving manual changes');
         print('  Current Component Area: ${matchingComponent.completedArea.toStringAsFixed(1)} sq ft');
         print('  Current Component Used: \$${matchingComponent.amountUsed.toStringAsFixed(2)}');
+        print('  Current Component Concrete: ${matchingComponent.concretePoured.toStringAsFixed(1)} cu yd');
         print('  Original Manual Area: ${matchingComponent.originalCompletedArea.toStringAsFixed(1)} sq ft');
         print('  Original Manual Used: \$${matchingComponent.originalAmountUsed.toStringAsFixed(2)}');
+        print('  Original Manual Concrete: ${matchingComponent.originalConcretePoured.toStringAsFixed(1)} cu yd');
         print('  Contract Progress Area: ${totalContractCompletedArea.toStringAsFixed(1)} sq ft');
         print('  Work Progress Area: ${totalWorkCompletedArea.toStringAsFixed(1)} sq ft');
         print('  Total Labor Area: ${totalLaborCompletedArea.toStringAsFixed(1)} sq ft');
+        print('  Total Labor Concrete: ${totalConcretePoured.toStringAsFixed(1)} cu yd');
+        print('  Initial Concrete Poured: ${initialConcretePoured.toStringAsFixed(1)} cu yd');
+        print('  Total Concrete with Initial: ${totalConcretePouredWithInitial.toStringAsFixed(1)} cu yd');
         print('  Total Labor Cost: \$${totalLaborCost.toStringAsFixed(2)}');
         print('  New Component Area: ${newCompletedArea.toStringAsFixed(1)} sq ft');
         print('  New Component Used: \$${newAmountUsed.toStringAsFixed(2)}');
+        print('  New Component Concrete: ${newConcretePoured.toStringAsFixed(1)} cu yd');
       }
 
       // Update component if values changed
-      if (newCompletedArea != matchingComponent.completedArea || newAmountUsed != matchingComponent.amountUsed) {
+      if (newCompletedArea != matchingComponent.completedArea || 
+          newAmountUsed != matchingComponent.amountUsed ||
+          newConcretePoured != matchingComponent.concretePoured) {
         final updatedComponent = matchingComponent.copyWith(
           completedArea: newCompletedArea,
           amountUsed: newAmountUsed,
+          concretePoured: newConcretePoured,
           updatedAt: DateTime.now(),
         );
 
         final success = await updateComponent(updatedComponent);
         if (success) {
-          if (kDebugMode) print('✅ SYNC: Updated component "${workCategory}" - Area: ${newCompletedArea.toStringAsFixed(1)} sq ft, Used: \$${newAmountUsed.toStringAsFixed(2)}');
+          if (kDebugMode) print('✅ SYNC: Updated component "${workCategory}" - Area: ${newCompletedArea.toStringAsFixed(1)} sq ft, Used: \$${newAmountUsed.toStringAsFixed(2)}, Concrete: ${newConcretePoured.toStringAsFixed(1)} cu yd');
         }
         return success;
       } else {
@@ -618,6 +673,103 @@ class FirestoreService {
       }
     } catch (e) {
       if (kDebugMode) print('❌ REVERSE_SYNC: Error syncing component to work setup: $e');
+      return false;
+    }
+  }
+
+  // Manual sync for all custom work setups in a project (for fixing existing data)
+  Future<bool> syncAllCustomWorkSetups(String projectId) async {
+    try {
+      final allLabor = await getProjectLabor(projectId);
+      final customWorkSetups = allLabor
+          .where((l) => l.isWorkSetup && l.remainingArea == null)
+          .toList();
+      
+      if (kDebugMode) print('🔄 MANUAL_SYNC: Found ${customWorkSetups.length} custom work setups to sync');
+      
+      bool allSuccess = true;
+      for (final workSetup in customWorkSetups) {
+        final success = await syncCustomWorkSetupRemainingValues(projectId, workSetup.id);
+        if (!success) allSuccess = false;
+      }
+      
+      if (kDebugMode) print('🔄 MANUAL_SYNC: Completed sync for all custom work setups');
+      return allSuccess;
+    } catch (e) {
+      if (kDebugMode) print('❌ MANUAL_SYNC: Error syncing all custom work setups: $e');
+      return false;
+    }
+  }
+
+  // Custom Work Setup Sync - Update work setup remaining values for custom component work setups
+  Future<bool> syncCustomWorkSetupRemainingValues(String projectId, String workSetupId) async {
+    try {
+      // Get the work setup
+      final allLabor = await getProjectLabor(projectId);
+      final workSetup = allLabor.where((l) => l.id == workSetupId && l.isWorkSetup).firstOrNull;
+      
+      if (workSetup == null) {
+        if (kDebugMode) print('🔄 CUSTOM_WORK_SETUP_SYNC: Work setup not found with ID: $workSetupId');
+        return true; // Not an error, just no matching work setup
+      }
+
+      // Check if this is a custom component work setup (not existing component)
+      // For existing component work setups, both remainingArea and remainingBudget should be non-null
+      // For custom component work setups, remainingArea should be null
+      if (workSetup.remainingArea != null) {
+        if (kDebugMode) print('🔄 CUSTOM_WORK_SETUP_SYNC: Work setup is for existing component - skipping sync');
+        return true; // Not an error, just not a custom component work setup
+      }
+
+      // Get all work progress entries for this work setup
+      final workProgressEntries = allLabor
+          .where((l) => l.workSetupId == workSetupId && l.isWorkProgress)
+          .toList();
+      
+      // Calculate current totals
+      final totalWorkedHours = Labor.calculateTotalHoursWorked(workProgressEntries);
+      final totalUsedBudget = workProgressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
+      
+      // Calculate remaining values
+      final originalMaxHours = workSetup.maxHours ?? 0.0;
+      final originalTotalBudget = workSetup.totalBudget ?? 0.0;
+      final remainingHours = originalMaxHours - totalWorkedHours;
+      final remainingBudget = originalTotalBudget - totalUsedBudget;
+
+      if (kDebugMode) {
+        print('🔄 CUSTOM_WORK_SETUP_SYNC: Updating custom work setup remaining values');
+        print('  Work Setup ID: $workSetupId');
+        print('  Work Setup Type: Custom Component (remainingArea is null)');
+        print('  Original Max Hours: ${originalMaxHours.toStringAsFixed(1)}');
+        print('  Total Worked Hours: ${totalWorkedHours.toStringAsFixed(1)}');
+        print('  Remaining Hours: ${remainingHours.toStringAsFixed(1)}');
+        print('  Original Total Budget: \$${originalTotalBudget.toStringAsFixed(2)}');
+        print('  Total Used Budget: \$${totalUsedBudget.toStringAsFixed(2)}');
+        print('  Remaining Budget: \$${remainingBudget.toStringAsFixed(2)}');
+        print('  Progress Entries Count: ${workProgressEntries.length}');
+      }
+
+      // Update work setup with calculated remaining values
+      final updatedWorkSetup = workSetup.copyWith(
+        remainingArea: null, // Keep null for custom component work setups
+        remainingBudget: remainingBudget,
+        remainingHours: remainingHours,
+        updatedAt: DateTime.now(),
+      );
+
+      final success = await updateLabor(updatedWorkSetup);
+      if (success) {
+        if (kDebugMode) {
+          print('✅ CUSTOM_WORK_SETUP_SYNC: Updated custom work setup remaining values');
+          print('  Updated remainingHours: ${updatedWorkSetup.remainingHours}');
+          print('  Updated remainingBudget: ${updatedWorkSetup.remainingBudget}');
+        }
+      } else {
+        if (kDebugMode) print('❌ CUSTOM_WORK_SETUP_SYNC: Failed to update work setup');
+      }
+      return success;
+    } catch (e) {
+      if (kDebugMode) print('❌ CUSTOM_WORK_SETUP_SYNC: Error syncing custom work setup remaining values: $e');
       return false;
     }
   }

@@ -130,15 +130,37 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     // Note: Labor costs for existing components are already included in component.amountUsed
     // through the sync process, so we only count custom labor to avoid double counting
     for (var labor in _labor) {
-      // Check if this labor workCategory matches any existing component
-      final hasMatchingComponent = _components.any((component) => component.name == labor.workCategory);
+      // Check if this labor workCategory matches any existing component (case-insensitive, partial matching)
+      final hasMatchingComponent = _components.any((component) {
+        final componentName = component.name.toLowerCase().trim();
+        final laborCategory = labor.workCategory.toLowerCase().trim();
+        
+        // Exact match
+        if (componentName == laborCategory) return true;
+        
+        // Partial match - check if labor category is contained in component name or vice versa
+        if (componentName.contains(laborCategory) || laborCategory.contains(componentName)) return true;
+        
+        // Handle common variations
+        if (componentName.replaceAll(' ', '').contains(laborCategory.replaceAll(' ', '')) ||
+            laborCategory.replaceAll(' ', '').contains(componentName.replaceAll(' ', ''))) return true;
+            
+        return false;
+      });
       
       // Only include labor cost if it's a custom component (no matching component exists)
-      if (!hasMatchingComponent) {
+      // AND it's not a work setup (work setups are budget allocations, not actual costs)
+      if (!hasMatchingComponent && !labor.isWorkSetup) {
         laborTotal += labor.totalCost; // Use totalCost to show actual work done
         if (kDebugMode) print('  Custom Labor: ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)}');
       } else {
-        if (kDebugMode) print('  Labor (existing component): ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)} (excluded from total)');
+        if (kDebugMode) {
+          if (hasMatchingComponent) {
+            print('  Labor (existing component): ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)} (excluded from total)');
+          } else if (labor.isWorkSetup) {
+            print('  Labor (work setup): ${labor.workCategory} - Cost: \$${labor.totalCost.toStringAsFixed(2)} (excluded from total)');
+          }
+        }
       }
     }
     
@@ -154,25 +176,62 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     print('  Project Budget: \$${widget.project.totalBudget.toStringAsFixed(2)}');
     print('  Remaining: \$${(widget.project.totalBudget - total).toStringAsFixed(2)}');
     
+    // Debug individual components
+    print('🔍 COMPONENT BREAKDOWN:');
+    for (var component in _components) {
+      print('  ${component.name}: amountUsed=\$${component.amountUsed.toStringAsFixed(2)}, totalCost=\$${component.totalCost.toStringAsFixed(2)}');
+    }
+    
     // Debug individual labor entries
     print('🔍 LABOR ENTRIES:');
     for (var labor in _labor) {
-      final hasMatchingComponent = _components.any((component) => component.name == labor.workCategory);
-      print('  ${labor.workCategory}: totalCost=\$${labor.totalCost.toStringAsFixed(2)}, totalValue=\$${labor.totalValue.toStringAsFixed(2)}, hasComponent=$hasMatchingComponent');
+      final hasMatchingComponent = _components.any((component) {
+        final componentName = component.name.toLowerCase().trim();
+        final laborCategory = labor.workCategory.toLowerCase().trim();
+        
+        // Exact match
+        if (componentName == laborCategory) return true;
+        
+        // Partial match - check if labor category is contained in component name or vice versa
+        if (componentName.contains(laborCategory) || laborCategory.contains(componentName)) return true;
+        
+        // Handle common variations
+        if (componentName.replaceAll(' ', '').contains(laborCategory.replaceAll(' ', '')) ||
+            laborCategory.replaceAll(' ', '').contains(componentName.replaceAll(' ', ''))) return true;
+            
+        return false;
+      });
+      print('  ${labor.workCategory}: totalCost=\$${labor.totalCost.toStringAsFixed(2)}, totalValue=\$${labor.totalValue.toStringAsFixed(2)}, hasComponent=$hasMatchingComponent, isWorkSetup=${labor.isWorkSetup}');
     }
     
     return total;
   }
 
-  double get _overallProgress {
+  // Calculate total area progress across all components
+  double get _totalAreaProgress {
     if (_components.isEmpty) return 0.0;
     
-    double totalProgress = 0.0;
+    double totalArea = 0.0;
+    double completedArea = 0.0;
+    
     for (var component in _components) {
-      totalProgress += component.overallProgressPercentage;
+      totalArea += component.totalArea;
+      completedArea += component.completedArea;
     }
     
-    return totalProgress / _components.length;
+    if (totalArea == 0) return 0.0;
+    return completedArea / totalArea;
+  }
+  
+  // Calculate budget progress (existing logic)
+  double get _budgetProgress {
+    if (widget.project.totalBudget <= 0) return 0.0;
+    return _totalUsedBudget / widget.project.totalBudget;
+  }
+  
+  // Combined overall progress (average of budget and area)
+  double get _overallProgress {
+    return (_budgetProgress + _totalAreaProgress) / 2;
   }
 
   @override
@@ -261,17 +320,59 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: _overallProgress,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                    color: _getProgressColor(_overallProgress),
+                  
+                  // Combined Progress Bar
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Combined Progress',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: _overallProgress,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                        color: _getProgressColor(_overallProgress),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_overallProgress * 100).toStringAsFixed(1)}% Complete',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${(_overallProgress * 100).toStringAsFixed(1)}% Complete',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Area Progress Bar
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Area Progress',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: _totalAreaProgress,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                        color: _getProgressColor(_totalAreaProgress),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_totalAreaProgress * 100).toStringAsFixed(1)}% Area Complete',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

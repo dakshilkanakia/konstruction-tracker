@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -348,10 +349,16 @@ class _LaborSectionState extends State<LaborSection> {
   }
 
   Widget _buildContractCard(Labor contract) {
-    // Get all progress entries for this contract
+    // Get all progress entries for this contract and sort by work date
     final progressEntries = _labor
         .where((l) => l.contractId == contract.id && l.isProgress)
-        .toList();
+        .toList()
+        ..sort((a, b) {
+          // Sort by work date (ascending), fallback to creation date if no work date
+          final aDate = a.workDate ?? a.createdAt;
+          final bDate = b.workDate ?? b.createdAt;
+          return aDate.compareTo(bDate);
+        });
     
     final totalSqFt = contract.totalSqFt ?? 0.0;
     final completedSqFt = Labor.calculateTotalCompleted(progressEntries);
@@ -360,6 +367,15 @@ class _LaborSectionState extends State<LaborSection> {
     final totalBudget = contract.totalValue;
     final completedBudget = progressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
     final remainingBudget = Labor.calculateRemainingBudget(totalBudget, completedBudget);
+    
+    // Concrete progress calculations
+    final totalConcrete = contract.totalConcrete;
+    final concretePoured = Labor.calculateTotalConcretePoured(progressEntries);
+    final initialConcretePoured = contract.initialConcretePoured ?? 0.0;
+    final totalConcretePoured = concretePoured + initialConcretePoured;
+    final concreteProgressPercentage = totalConcrete != null 
+        ? Labor.calculateConcreteProgressPercentage(totalConcrete, totalConcretePoured)
+        : 0.0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -476,6 +492,43 @@ class _LaborSectionState extends State<LaborSection> {
             ),
             const SizedBox(height: 12),
 
+            // Concrete progress (if total concrete is set)
+            if (totalConcrete != null) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Concrete: ${concreteProgressPercentage.toStringAsFixed(1)}%',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '${totalConcretePoured.toStringAsFixed(1)} / ${totalConcrete.toStringAsFixed(1)} cu yd',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(
+                    value: (concreteProgressPercentage / 100).clamp(0.0, 1.0),
+                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      concreteProgressPercentage >= 100
+                          ? Colors.orange // Orange for concrete overpour
+                          : const Color(0xFFFF9800), // Orange for concrete progress
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Budget info
             Row(
               children: [
@@ -531,10 +584,16 @@ class _LaborSectionState extends State<LaborSection> {
   }
 
   Widget _buildWorkSetupCard(Labor workSetup) {
-    // Get all work progress entries for this work setup
+    // Get all work progress entries for this work setup and sort by work date
     final workProgressEntries = _labor
         .where((l) => l.workSetupId == workSetup.id && l.isWorkProgress)
-        .toList();
+        .toList()
+        ..sort((a, b) {
+          // Sort by work date (ascending), fallback to creation date if no work date
+          final aDate = a.workDate ?? a.createdAt;
+          final bDate = b.workDate ?? b.createdAt;
+          return aDate.compareTo(bDate);
+        });
     
     // Detect work setup type (existing component vs custom component)
     final isExistingComponentWorkSetup = workSetup.remainingArea != null && workSetup.remainingBudget != null;
@@ -549,16 +608,30 @@ class _LaborSectionState extends State<LaborSection> {
         : Labor.calculateWorkProgressPercentage(maxHours ?? 0.0, workedHours);
     final remainingHours = isExistingComponentWorkSetup 
         ? null 
-        : ((maxHours ?? 0.0) - workedHours);
+        : (workSetup.remainingHours ?? ((maxHours ?? 0.0) - workedHours));
     
     // Calculate used budget from progress entries
     final usedBudget = workProgressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
     
     // For existing component work setups, use the stored remaining values directly
-    // For custom component work setups, calculate remaining budget
+    // For custom component work setups, use the synced remaining budget or calculate from original total budget
     final remainingBudget = isExistingComponentWorkSetup 
         ? (workSetup.remainingBudget ?? 0.0)
-        : ((workSetup.totalBudget ?? 0.0) - usedBudget);
+        : (workSetup.remainingBudget ?? ((workSetup.totalBudget ?? 0.0) - usedBudget));
+    
+    // Debug logging for work setup card
+    if (kDebugMode) {
+      print('🔍 WORK_SETUP_CARD: Building card for work setup ${workSetup.id}');
+      print('  Work Setup Type: ${isExistingComponentWorkSetup ? "Existing Component" : "Custom Component"}');
+      print('  Work Setup remainingBudget: ${workSetup.remainingBudget}');
+      print('  Work Setup remainingHours: ${workSetup.remainingHours}');
+      print('  Work Setup totalBudget: ${workSetup.totalBudget}');
+      print('  Work Setup maxHours: ${workSetup.maxHours}');
+      print('  Calculated usedBudget: $usedBudget');
+      print('  Calculated remainingBudget: $remainingBudget');
+      print('  Calculated remainingHours: $remainingHours');
+      print('  Progress Entries Count: ${workProgressEntries.length}');
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -790,6 +863,14 @@ class _LaborSectionState extends State<LaborSection> {
   }
 
   Future<void> _showWorkProgressHistory(Labor workSetup, List<Labor> workProgressEntries) async {
+    // Sort work progress entries by work date (ascending)
+    final sortedEntries = List<Labor>.from(workProgressEntries)
+      ..sort((a, b) {
+        final aDate = a.workDate ?? a.createdAt;
+        final bDate = b.workDate ?? b.createdAt;
+        return aDate.compareTo(bDate);
+      });
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -797,12 +878,12 @@ class _LaborSectionState extends State<LaborSection> {
         content: SizedBox(
           width: double.maxFinite,
           height: 400,
-          child: workProgressEntries.isEmpty
+          child: sortedEntries.isEmpty
               ? const Center(child: Text('No progress entries yet'))
               : ListView.builder(
-                  itemCount: workProgressEntries.length,
+                  itemCount: sortedEntries.length,
                   itemBuilder: (context, index) {
-                    final progress = workProgressEntries[index];
+                    final progress = sortedEntries[index];
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -897,6 +978,14 @@ class _LaborSectionState extends State<LaborSection> {
   }
 
   Future<void> _showProgressHistory(Labor contract, List<Labor> progressEntries) async {
+    // Sort progress entries by work date (ascending)
+    final sortedEntries = List<Labor>.from(progressEntries)
+      ..sort((a, b) {
+        final aDate = a.workDate ?? a.createdAt;
+        final bDate = b.workDate ?? b.createdAt;
+        return aDate.compareTo(bDate);
+      });
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -904,15 +993,17 @@ class _LaborSectionState extends State<LaborSection> {
         content: SizedBox(
           width: double.maxFinite,
           height: 300,
-          child: progressEntries.isEmpty
+          child: sortedEntries.isEmpty
               ? const Center(child: Text('No progress entries yet'))
               : ListView.builder(
-                  itemCount: progressEntries.length,
+                  itemCount: sortedEntries.length,
                   itemBuilder: (context, index) {
-                    final entry = progressEntries[index];
+                    final entry = sortedEntries[index];
                     return ListTile(
                       leading: const Icon(Icons.trending_up),
-                      title: Text('${entry.completedSqFt?.toStringAsFixed(1) ?? '0'} sq ft'),
+                      title: Text(
+                        '${entry.completedSqFt?.toStringAsFixed(1) ?? '0'} sq ft${entry.concretePoured != null ? ' • ${entry.concretePoured!.toStringAsFixed(1)} cu yd' : ''}'
+                      ),
                       subtitle: Text(
                         '${entry.workDate?.day}/${entry.workDate?.month}/${entry.workDate?.year} • \$${entry.totalCost.toStringAsFixed(2)}',
                       ),

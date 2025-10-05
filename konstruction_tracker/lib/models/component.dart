@@ -12,6 +12,7 @@ class Component {
   final double concretePoured; // concrete already poured in cubic yards
   final double originalCompletedArea; // original manual completed area (before labor sync)
   final double originalAmountUsed; // original manual amount used (before labor sync)
+  final double originalConcretePoured; // original manual concrete poured (before labor sync)
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -27,6 +28,7 @@ class Component {
     required this.concretePoured,
     required this.originalCompletedArea,
     required this.originalAmountUsed,
+    required this.originalConcretePoured,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -67,6 +69,7 @@ class Component {
       'concretePoured': concretePoured,
       'originalCompletedArea': originalCompletedArea,
       'originalAmountUsed': originalAmountUsed,
+      'originalConcretePoured': originalConcretePoured,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -85,6 +88,7 @@ class Component {
       concretePoured: (map['concretePoured'] ?? 0.0).toDouble(),
       originalCompletedArea: (map['originalCompletedArea'] ?? 0.0).toDouble(),
       originalAmountUsed: (map['originalAmountUsed'] ?? 0.0).toDouble(),
+      originalConcretePoured: (map['originalConcretePoured'] ?? 0.0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
     );
@@ -102,6 +106,7 @@ class Component {
     double? concretePoured,
     double? originalCompletedArea,
     double? originalAmountUsed,
+    double? originalConcretePoured,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -117,6 +122,7 @@ class Component {
       concretePoured: concretePoured ?? this.concretePoured,
       originalCompletedArea: originalCompletedArea ?? this.originalCompletedArea,
       originalAmountUsed: originalAmountUsed ?? this.originalAmountUsed,
+      originalConcretePoured: originalConcretePoured ?? this.originalConcretePoured,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
