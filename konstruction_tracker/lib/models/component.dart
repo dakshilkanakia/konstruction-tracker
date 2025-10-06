@@ -13,6 +13,7 @@ class Component {
   final double originalCompletedArea; // original manual completed area (before labor sync)
   final double originalAmountUsed; // original manual amount used (before labor sync)
   final double originalConcretePoured; // original manual concrete poured (before labor sync)
+  final bool isManuallyCompleted; // manual completion status
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -29,6 +30,7 @@ class Component {
     required this.originalCompletedArea,
     required this.originalAmountUsed,
     required this.originalConcretePoured,
+    required this.isManuallyCompleted,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -53,6 +55,9 @@ class Component {
   // Overall Progress (average of area, budget, and concrete progress)
   double get overallProgressPercentage => (areaProgressPercentage + budgetProgressPercentage + concreteProgressPercentage) / 3;
   
+  // Overall completion status (manual override or automatic)
+  bool get isCompleted => isManuallyCompleted || (isAreaCompleted && !isBudgetExceeded);
+  
   // For backward compatibility and budget calculations
   double get totalCost => amountUsed;
 
@@ -70,6 +75,7 @@ class Component {
       'originalCompletedArea': originalCompletedArea,
       'originalAmountUsed': originalAmountUsed,
       'originalConcretePoured': originalConcretePoured,
+      'isManuallyCompleted': isManuallyCompleted,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -89,6 +95,7 @@ class Component {
       originalCompletedArea: (map['originalCompletedArea'] ?? 0.0).toDouble(),
       originalAmountUsed: (map['originalAmountUsed'] ?? 0.0).toDouble(),
       originalConcretePoured: (map['originalConcretePoured'] ?? 0.0).toDouble(),
+      isManuallyCompleted: map['isManuallyCompleted'] ?? false,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
     );
@@ -107,6 +114,7 @@ class Component {
     double? originalCompletedArea,
     double? originalAmountUsed,
     double? originalConcretePoured,
+    bool? isManuallyCompleted,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -123,6 +131,7 @@ class Component {
       originalCompletedArea: originalCompletedArea ?? this.originalCompletedArea,
       originalAmountUsed: originalAmountUsed ?? this.originalAmountUsed,
       originalConcretePoured: originalConcretePoured ?? this.originalConcretePoured,
+      isManuallyCompleted: isManuallyCompleted ?? this.isManuallyCompleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

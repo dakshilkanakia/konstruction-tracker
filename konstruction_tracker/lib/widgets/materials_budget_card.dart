@@ -32,7 +32,7 @@ class _MaterialsBudgetCardState extends State<MaterialsBudgetCard> {
   }
 
   double get _usedBudget {
-    return widget.materials.fold(0.0, (sum, material) => sum + material.totalCost);
+    return widget.materials.fold(0.0, (sum, material) => sum + material.finalTotalCost);
   }
 
   double get _remainingBudget {
@@ -42,7 +42,7 @@ class _MaterialsBudgetCardState extends State<MaterialsBudgetCard> {
 
   double get _budgetProgress {
     if (widget.project.materialsBudget == null || widget.project.materialsBudget! <= 0) return 0.0;
-    return (_usedBudget / widget.project.materialsBudget!).clamp(0.0, 1.0);
+    return _usedBudget / widget.project.materialsBudget!;
   }
 
   Color _getBudgetColor(double progress) {

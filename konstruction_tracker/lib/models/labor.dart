@@ -21,6 +21,7 @@ class Labor {
   final double? completedSqFt; // Square feet completed in this entry
   final double? concretePoured; // Concrete poured in this entry (cubic yards)
   final DateTime? workDate; // Date work was completed
+  final String? location; // Optional location where work was performed
   final String? subcontractorCompany; // Optional company name
   
   // Non-contracted work fields
@@ -62,6 +63,7 @@ class Labor {
     this.completedSqFt,
     this.concretePoured,
     this.workDate,
+    this.location,
     this.subcontractorCompany,
     
     // Non-contracted work fields
@@ -223,6 +225,7 @@ class Labor {
       'completedSqFt': completedSqFt,
       'concretePoured': concretePoured,
       'workDate': workDate != null ? Timestamp.fromDate(workDate!) : null,
+      'location': location,
       'subcontractorCompany': subcontractorCompany,
       
       // Non-contracted work fields
@@ -267,6 +270,7 @@ class Labor {
       completedSqFt: map['completedSqFt']?.toDouble(),
       concretePoured: map['concretePoured']?.toDouble(),
       workDate: map['workDate'] != null ? (map['workDate'] as Timestamp).toDate() : null,
+      location: map['location'],
       subcontractorCompany: map['subcontractorCompany'],
       
       // Non-contracted work fields
@@ -310,6 +314,7 @@ class Labor {
     double? completedSqFt,
     double? concretePoured,
     DateTime? workDate,
+    String? location,
     String? subcontractorCompany,
     
     // Non-contracted work fields
@@ -351,6 +356,7 @@ class Labor {
       completedSqFt: completedSqFt ?? this.completedSqFt,
       concretePoured: concretePoured ?? this.concretePoured,
       workDate: workDate ?? this.workDate,
+      location: location ?? this.location,
       subcontractorCompany: subcontractorCompany ?? this.subcontractorCompany,
       
       // Non-contracted work fields

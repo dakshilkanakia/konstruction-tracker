@@ -83,7 +83,7 @@ class MaterialCard extends StatelessWidget {
                     child: _buildInfoItem(
                       context,
                       'Total Cost',
-                      '\$${material.totalCost.toStringAsFixed(2)}',
+                      '\$${material.finalTotalCost.toStringAsFixed(2)}',
                       Icons.calculate,
                       Colors.green,
                     ),
@@ -108,7 +108,7 @@ class MaterialCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
-                      'Total: \$${material.totalCost.toStringAsFixed(2)}',
+                      'Total: \$${material.finalTotalCost.toStringAsFixed(2)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,

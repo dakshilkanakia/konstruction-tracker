@@ -32,6 +32,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
   final _completedAreaController = TextEditingController();
   final _totalHoursController = TextEditingController();
   final _fixedHourlyRateController = TextEditingController();
+  final _locationController = TextEditingController();
 
   bool _isLoading = false;
   DateTime _workDate = DateTime.now();
@@ -130,7 +131,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
       }
       
       // If not available, calculate from original max hours
-      final originalMaxHours = workSetup.maxHours ?? 0.0;
+      final originalMaxHours = workSetup.maxHours;
       if (kDebugMode) print('🔍 DIRECT_CALC: Using original maxHours: $originalMaxHours');
       return originalMaxHours - currentEntryHours;
     } catch (e) {
@@ -165,6 +166,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
     _completedAreaController.text = workProgress.completedArea?.toString() ?? '';
     _totalHoursController.text = workProgress.hoursWorked?.toString() ?? '';
     _fixedHourlyRateController.text = workProgress.fixedHourlyRate?.toString() ?? '';
+    _locationController.text = workProgress.location ?? '';
     _workDate = workProgress.workDate ?? DateTime.now();
   }
 
@@ -176,6 +178,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
     _completedAreaController.dispose();
     _totalHoursController.dispose();
     _fixedHourlyRateController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -203,6 +206,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
       final subcontractorCompany = _isExistingComponentWorkSetup 
           ? null 
           : (_companyController.text.trim().isEmpty ? null : _companyController.text.trim());
+      final location = _locationController.text.trim().isEmpty ? null : _locationController.text.trim();
 
       final workProgress = Labor(
         id: _isEditing ? widget.workProgress!.id : const Uuid().v4(),
@@ -216,6 +220,7 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
         numberOfWorkers: numberOfWorkers,
         completedArea: completedArea,
         workDate: _workDate,
+        location: location,
         subcontractorCompany: subcontractorCompany,
         createdAt: _isEditing ? widget.workProgress!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
@@ -590,6 +595,17 @@ class _AddWorkProgressScreenState extends State<AddWorkProgressScreen> {
                     labelText: 'Company Name (Optional)',
                     hintText: 'e.g., ABC Construction',
                     prefixIcon: Icon(Icons.business),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Location (Optional)
+                TextFormField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Location (Optional)',
+                    hintText: 'e.g., North side, Building A, etc.',
+                    prefixIcon: Icon(Icons.location_on),
                   ),
                 ),
               ],

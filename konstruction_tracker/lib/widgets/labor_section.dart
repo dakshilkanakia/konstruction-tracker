@@ -908,6 +908,8 @@ class _LaborSectionState extends State<LaborSection> {
                                 ? 'Date: ${DateFormat('MMM dd, yyyy').format(progress.workDate!)}'
                                 : 'Date: Not specified',
                           ),
+                          if (progress.location?.isNotEmpty == true)
+                            Text('📍 Location: ${progress.location}'),
                           if (progress.subcontractorCompany?.isNotEmpty == true)
                             Text('Company: ${progress.subcontractorCompany}'),
                           if (progress.numberOfWorkers != null)

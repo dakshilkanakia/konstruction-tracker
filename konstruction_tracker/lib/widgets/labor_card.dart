@@ -159,6 +159,13 @@ class LaborCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if (labor.location?.isNotEmpty == true)
+                          Text(
+                            '📍 ${labor.location}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                            ),
+                          ),
                         if (labor.subcontractorCompany?.isNotEmpty == true)
                           Text(
                             labor.subcontractorCompany!,
@@ -376,10 +383,19 @@ class LaborCard extends StatelessWidget {
               ),
               
               // Optional details
-              if (labor.subcontractorCompany?.isNotEmpty == true || labor.numberOfWorkers != null) ...[
+              if (labor.location?.isNotEmpty == true || labor.subcontractorCompany?.isNotEmpty == true || labor.numberOfWorkers != null) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
+                    if (labor.location?.isNotEmpty == true)
+                      Expanded(
+                        child: _buildInfoItem(
+                          context,
+                          'Location',
+                          labor.location!,
+                          Icons.location_on,
+                        ),
+                      ),
                     if (labor.subcontractorCompany?.isNotEmpty == true)
                       Expanded(
                         child: _buildInfoItem(
@@ -432,6 +448,13 @@ class LaborCard extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        if (labor.location?.isNotEmpty == true)
+                          Text(
+                            '📍 ${labor.location}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                            ),
+                          ),
                         if (labor.subcontractorCompany?.isNotEmpty == true)
                           Text(
                             labor.subcontractorCompany!,

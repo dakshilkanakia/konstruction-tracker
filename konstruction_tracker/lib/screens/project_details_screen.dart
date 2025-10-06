@@ -8,6 +8,7 @@ import '../models/labor.dart';
 import '../models/material.dart' as models;
 import '../models/machinery.dart';
 import '../services/firestore_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/budget_progress_card.dart';
 import '../widgets/components_section.dart';
 import '../widgets/materials_section.dart';
@@ -116,8 +117,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     
     // Add material costs
     for (var material in _materials) {
-      materialTotal += material.totalCost;
-      if (kDebugMode) print('  Material: ${material.name} - Cost: \$${material.totalCost.toStringAsFixed(2)}');
+      materialTotal += material.finalTotalCost;
+      if (kDebugMode) print('  Material: ${material.name} - Cost: \$${material.finalTotalCost.toStringAsFixed(2)}');
     }
     
     // Add machinery costs
@@ -239,6 +240,27 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.project.name),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'export') {
+                _exportProjectReport();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'export',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf),
+                    SizedBox(width: 8),
+                    Text('Export PDF Report'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -605,5 +627,16 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         builder: (context) => AddDailyLogScreen(projectId: widget.project.id),
       ),
     ).then((_) => _loadProjectData());
+  }
+
+  void _exportProjectReport() {
+    PdfExportService.exportProjectReport(
+      context,
+      widget.project,
+      _components,
+      _labor,
+      _materials,
+      _machinery,
+    );
   }
 }

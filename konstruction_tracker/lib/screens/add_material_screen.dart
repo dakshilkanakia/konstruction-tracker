@@ -24,6 +24,7 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
   final _nameController = TextEditingController();
   final _quantityOrderedController = TextEditingController();
   final _costPerUnitController = TextEditingController();
+  final _totalCostController = TextEditingController();
   final _unitController = TextEditingController();
 
   bool _isLoading = false;
@@ -44,6 +45,7 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     _nameController.text = material.name ?? '';
     _quantityOrderedController.text = material.quantityOrdered?.toString() ?? '';
     _costPerUnitController.text = material.costPerUnit?.toString() ?? '';
+    _totalCostController.text = material.totalCost?.toString() ?? '';
     _unitController.text = material.unit ?? '';
   }
 
@@ -52,6 +54,7 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     _nameController.dispose();
     _quantityOrderedController.dispose();
     _costPerUnitController.dispose();
+    _totalCostController.dispose();
     _unitController.dispose();
     super.dispose();
   }
@@ -71,6 +74,24 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
       final costPerUnit = _costPerUnitController.text.trim().isEmpty 
           ? null 
           : double.tryParse(_costPerUnitController.text);
+      final totalCost = _totalCostController.text.trim().isEmpty 
+          ? null 
+          : double.tryParse(_totalCostController.text);
+
+      // Validate that if both quantity and cost per unit are provided, total cost should match
+      if (quantityOrdered != null && costPerUnit != null && totalCost != null) {
+        final calculatedTotal = quantityOrdered * costPerUnit;
+        if ((calculatedTotal - totalCost).abs() > 0.01) { // Allow small floating point differences
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Total cost (\$${totalCost.toStringAsFixed(2)}) must match calculated cost (\$${calculatedTotal.toStringAsFixed(2)})'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
 
       final material = models.Material(
         id: _isEditing ? widget.material!.id : const Uuid().v4(),
@@ -78,6 +99,7 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
         name: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
         quantityOrdered: quantityOrdered,
         costPerUnit: costPerUnit,
+        totalCost: totalCost,
         unit: _unitController.text.trim().isEmpty ? null : _unitController.text.trim(),
         createdAt: _isEditing ? widget.material!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
@@ -249,6 +271,47 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                     }
                   }
                   return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Total Cost
+              Builder(
+                builder: (context) {
+                  final quantity = double.tryParse(_quantityOrderedController.text);
+                  final costPerUnit = double.tryParse(_costPerUnitController.text);
+                  final hasBothValues = quantity != null && costPerUnit != null;
+                  
+                  // Auto-calculate total cost if both quantity and cost per unit are provided
+                  if (hasBothValues && _totalCostController.text.isEmpty) {
+                    final calculatedTotal = quantity * costPerUnit;
+                    _totalCostController.text = calculatedTotal.toStringAsFixed(2);
+                  }
+                  
+                  return TextFormField(
+                    controller: _totalCostController,
+                    enabled: !hasBothValues, // Disable if both quantity and cost per unit are provided
+                    decoration: InputDecoration(
+                      labelText: hasBothValues ? 'Total Cost (Calculated)' : 'Total Cost',
+                      hintText: hasBothValues ? 'Auto-calculated' : 'e.g., 550.00',
+                      prefixIcon: const Icon(Icons.attach_money),
+                    ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                validator: (value) {
+                  // Total cost is optional, but if provided, must be valid
+                  if (value != null && value.trim().isNotEmpty) {
+                    final cost = double.tryParse(value);
+                    if (cost == null || cost < 0) {
+                      return 'Please enter a valid total cost';
+                    }
+                  }
+                  return null;
+                },
+                onChanged: (value) => setState(() {}), // Trigger rebuild for preview
+                  );
                 },
               ),
               const SizedBox(height: 16),

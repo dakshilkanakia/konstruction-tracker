@@ -155,6 +155,19 @@ class FirestoreService {
     }
   }
 
+  Future<bool> updateComponentStatus(String componentId, bool isCompleted) async {
+    try {
+      await _db.collection('components').doc(componentId).update({
+        'isManuallyCompleted': isCompleted,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Error updating component status: $e');
+      return false;
+    }
+  }
+
   Future<bool> deleteComponent(String componentId) async {
     try {
       if (kDebugMode) print('Deleting component: $componentId');
@@ -731,7 +744,7 @@ class FirestoreService {
       final totalUsedBudget = workProgressEntries.fold(0.0, (sum, entry) => sum + entry.totalCost);
       
       // Calculate remaining values
-      final originalMaxHours = workSetup.maxHours ?? 0.0;
+      final originalMaxHours = workSetup.maxHours;
       final originalTotalBudget = workSetup.totalBudget ?? 0.0;
       final remainingHours = originalMaxHours - totalWorkedHours;
       final remainingBudget = originalTotalBudget - totalUsedBudget;

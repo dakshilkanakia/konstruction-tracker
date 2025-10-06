@@ -27,6 +27,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
   final _formKey = GlobalKey<FormState>();
   final _completedSqFtController = TextEditingController();
   final _concretePouredController = TextEditingController();
+  final _locationController = TextEditingController();
   final _subcontractorController = TextEditingController();
 
   bool _isLoading = false;
@@ -45,6 +46,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
     final progress = widget.progress!;
     _completedSqFtController.text = progress.completedSqFt?.toString() ?? '';
     _concretePouredController.text = progress.concretePoured?.toString() ?? '';
+    _locationController.text = progress.location ?? '';
     _subcontractorController.text = progress.subcontractorCompany ?? '';
     _workDate = progress.workDate ?? DateTime.now();
   }
@@ -53,6 +55,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
   void dispose() {
     _completedSqFtController.dispose();
     _concretePouredController.dispose();
+    _locationController.dispose();
     _subcontractorController.dispose();
     super.dispose();
   }
@@ -67,6 +70,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
       
       final completedSqFt = double.tryParse(_completedSqFtController.text) ?? 0.0;
       final concretePoured = double.tryParse(_concretePouredController.text);
+      final location = _locationController.text.trim().isEmpty ? null : _locationController.text.trim();
 
       final progress = Labor(
         id: _isEditing ? widget.progress!.id : const Uuid().v4(),
@@ -79,6 +83,7 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
         concretePoured: concretePoured,
         ratePerSqFt: widget.contract.ratePerSqFt, // Copy from contract for cost calculation
         workDate: _workDate,
+        location: location,
         subcontractorCompany: _subcontractorController.text.trim().isEmpty 
             ? null 
             : _subcontractorController.text.trim(),
@@ -304,6 +309,17 @@ class _AddProgressScreenState extends State<AddProgressScreen> {
                     ],
                   ),
                 ),
+              const SizedBox(height: 16),
+
+              // Location (Optional)
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(
+                  labelText: 'Location (Optional)',
+                  hintText: 'e.g., North side, Building A, etc.',
+                  prefixIcon: Icon(Icons.location_on),
+                ),
+              ),
               const SizedBox(height: 16),
 
               // Subcontractor Company (Optional)

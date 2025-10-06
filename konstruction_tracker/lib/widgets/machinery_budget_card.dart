@@ -42,7 +42,7 @@ class _MachineryBudgetCardState extends State<MachineryBudgetCard> {
 
   double get _budgetProgress {
     if (widget.project.machineryBudget == null || widget.project.machineryBudget! <= 0) return 0.0;
-    return (_usedBudget / widget.project.machineryBudget!).clamp(0.0, 1.0);
+    return _usedBudget / widget.project.machineryBudget!;
   }
 
   Color _getBudgetColor(double progress) {

@@ -47,7 +47,7 @@ class BudgetProgressCard extends StatelessWidget {
 
             // Progress Bar
             LinearProgressIndicator(
-              value: budgetProgress.clamp(0.0, 1.0),
+              value: budgetProgress,
               backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
               color: _getBudgetColor(),
             ),

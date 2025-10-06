@@ -167,6 +167,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
       originalConcretePoured: _isEditing && concretePoured == widget.component!.concretePoured 
           ? widget.component!.originalConcretePoured 
           : concretePoured,
+      isManuallyCompleted: _isEditing ? widget.component!.isManuallyCompleted : false,
       createdAt: _isEditing ? widget.component!.createdAt : DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -631,7 +632,7 @@ class _AddComponentScreenState extends State<AddComponentScreen> {
     
     if (componentBudget <= 0) return const SizedBox.shrink();
     
-    final progress = (amountUsed / componentBudget).clamp(0.0, 1.0);
+    final progress = amountUsed / componentBudget;
     final isOverBudget = amountUsed > componentBudget;
     final isWarning = progress > 0.8;
     

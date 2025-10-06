@@ -475,13 +475,7 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
                           return 'Please enter a valid amount';
                         }
                         
-                        final componentBudget = _showAdvanced 
-                            ? double.tryParse(_componentBudgetController.text) ?? widget.component.componentBudget
-                            : widget.component.componentBudget;
-                        
-                        if (amountUsed > componentBudget) {
-                          return 'Amount used cannot exceed component budget';
-                        }
+                        // Allow amount used to exceed component budget - warning is shown in UI
                       }
                       return null;
                     },
@@ -575,9 +569,9 @@ class _QuickEditComponentDialogState extends State<QuickEditComponentDialog> {
         : widget.component.totalConcrete;
     final concretePoured = double.tryParse(_concretePouredController.text) ?? 0;
 
-    final areaProgress = totalArea > 0 ? (completedArea / totalArea).clamp(0.0, 1.0) : 0.0;
-    final budgetProgress = componentBudget > 0 ? (amountUsed / componentBudget).clamp(0.0, 1.0) : 0.0;
-    final concreteProgress = totalConcrete > 0 ? (concretePoured / totalConcrete).clamp(0.0, 1.0) : 0.0;
+    final areaProgress = totalArea > 0 ? (completedArea / totalArea) : 0.0;
+    final budgetProgress = componentBudget > 0 ? (amountUsed / componentBudget) : 0.0;
+    final concreteProgress = totalConcrete > 0 ? (concretePoured / totalConcrete) : 0.0;
 
     final isAreaExceeded = completedArea > totalArea;
     final isBudgetExceeded = amountUsed > componentBudget;

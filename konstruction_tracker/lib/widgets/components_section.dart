@@ -81,15 +81,77 @@ class ComponentsSection extends StatelessWidget {
               onRefresh();
             }
           },
+          onEdit: () async {
+            // Show quick edit dialog
+            final result = await showDialog<bool>(
+              context: context,
+              builder: (context) => QuickEditComponentDialog(
+                component: component,
+                project: project,
+              ),
+            );
+            
+            // Refresh if component was updated
+            if (result == true) {
+              onRefresh();
+            }
+          },
           onDelete: () async {
             // Delete component and refresh
             await _deleteComponent(context, component);
             onRefresh();
           },
+          onRefresh: onRefresh,
+          onToggleStatus: (component) async {
+            await _toggleComponentStatus(context, component, onRefresh);
+          },
         );
         },
       ),
     );
+  }
+
+  Future<void> _toggleComponentStatus(BuildContext context, Component component, VoidCallback onRefresh) async {
+    try {
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final newStatus = !component.isManuallyCompleted;
+      
+      final success = await firestoreService.updateComponentStatus(
+        component.id, 
+        newStatus
+      );
+      
+      if (success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newStatus 
+                ? 'Component marked as completed' 
+                : 'Component marked as in progress'
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Refresh the components list
+        onRefresh();
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update component status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error updating component status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _deleteComponent(BuildContext context, Component component) async {
@@ -230,6 +292,9 @@ class ComponentCard extends StatelessWidget {
   final Project project;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onRefresh;
+  final Function(Component)? onToggleStatus;
 
   const ComponentCard({
     super.key,
@@ -237,6 +302,9 @@ class ComponentCard extends StatelessWidget {
     required this.project,
     required this.onTap,
     required this.onDelete,
+    this.onEdit,
+    this.onRefresh,
+    this.onToggleStatus,
   });
 
   @override
@@ -276,40 +344,70 @@ class ComponentCard extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          component.isAreaCompleted && !component.isBudgetExceeded ? 'Completed' : 'In Progress',
+                          component.isCompleted ? 'Completed' : 'In Progress',
                           style: TextStyle(
-                            color: _getStatusColor(component.overallProgressPercentage),
+                            color: component.isCompleted ? Colors.green : _getStatusColor(component.overallProgressPercentage),
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: onDelete,
+                      PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            onEdit?.call();
+                          } else if (value == 'delete') {
+                            onDelete();
+                          } else if (value == 'toggle_status') {
+                            onToggleStatus?.call(component);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 16),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'toggle_status',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  component.isCompleted ? Icons.undo : Icons.check,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(component.isCompleted ? 'Mark as In Progress' : 'Mark as Completed'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 16, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Icon(
-                            Icons.delete,
+                            Icons.more_vert,
                             size: 16,
-                            color: Colors.red,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ),
@@ -471,11 +569,11 @@ class ComponentCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
-                    value: component.budgetProgressPercentage.clamp(0.0, 1.0),
+                    value: component.budgetProgressPercentage,
                     backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
                     color: component.isBudgetExceeded ? Colors.red : _getBudgetColor(component.budgetProgressPercentage),
                   ),
-                  if (component.isBudgetExceeded || component.isBudgetWarning) ...[
+                  if (!component.isCompleted && (component.isBudgetExceeded || component.isBudgetWarning)) ...[
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -537,7 +635,7 @@ class ComponentCard extends StatelessWidget {
                           ? Colors.orange // Changed from red to orange for warning
                           : _getConcreteColor(component.concreteProgressPercentage),
                     ),
-                    if (component.concretePoured > component.totalConcrete || component.isConcreteWarning) ...[
+                    if (!component.isCompleted && (component.concretePoured > component.totalConcrete || component.isConcreteWarning)) ...[
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -614,4 +712,5 @@ class ComponentCard extends StatelessWidget {
     if (progress > 0.5) return const Color(0xFFFF9800); // Orange for concrete
     return const Color(0xFFFFC107); // Amber for good concrete progress
   }
+
 }

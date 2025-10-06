@@ -262,6 +262,6 @@ class _MaterialsSectionState extends State<MaterialsSection> {
   }
 
   double _getTotalCost() {
-    return _materials.fold(0.0, (sum, material) => sum + material.totalCost);
+    return _materials.fold(0.0, (sum, material) => sum + material.finalTotalCost);
   }
 }
